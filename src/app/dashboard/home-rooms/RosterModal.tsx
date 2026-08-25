@@ -7,6 +7,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Field";
 import type { ClassroomRow } from "@/lib/classrooms";
 
+interface RosterStudentGuardian {
+  parentId: string;
+  name: string;
+  relationship?: string;
+}
+
 interface RosterStudent {
   id: string;
   fullName: string;
@@ -14,12 +20,14 @@ interface RosterStudent {
   gender: string;
   isActive: boolean;
   enrolledAt: string | null;
+  guardians?: RosterStudentGuardian[];
 }
 
 interface StudentOption {
   id: string;
   fullName: string;
   age: number;
+  parentName?: string | null;
   currentClassroomId: string | null;
 }
 
@@ -194,6 +202,7 @@ export function RosterModal({
                 {selectable.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.fullName} ({option.age})
+                    {option.parentName ? ` • Parent: ${option.parentName}` : ""}
                     {option.currentClassroomId ? " - currently seated" : ""}
                   </option>
                 ))}
@@ -218,40 +227,74 @@ export function RosterModal({
             No children in this room yet.
           </p>
         ) : (
-          <ul className="divide-y divide-border rounded-control border border-border">
-            {students.map((student) => (
-              <li
-                key={student.id}
-                className="flex items-center justify-between gap-3 px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {student.fullName}
-                  </div>
-                  <div className="text-xs text-muted">
-                    {student.age} {student.age === 1 ? "year" : "years"}
-                    {student.enrolledAt
-                      ? ` - since ${student.enrolledAt.slice(0, 10)}`
-                      : ""}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {!student.isActive && <Badge tone="neutral">Inactive</Badge>}
-                  {canAssign && (
-                    <button
-                      type="button"
-                      onClick={() => withdraw(student)}
-                      disabled={busy}
-                      aria-label={`Remove ${student.fullName} from ${classroom.name}`}
-                      className="flex items-center gap-1.5 rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle disabled:opacity-50"
-                    >
-                      <UserMinus size={15} />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-hidden rounded-control border border-border bg-surface">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-surface-muted">
+                  <tr className="text-xs uppercase tracking-wide text-muted">
+                    <th className="px-4 py-2.5 font-semibold">Name</th>
+                    <th className="px-4 py-2.5 font-semibold">Parent</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {students.map((student) => {
+                    const parentNames =
+                      student.guardians && student.guardians.length > 0
+                        ? student.guardians.map((g) => g.name).join(", ")
+                        : null;
+
+                    return (
+                      <tr
+                        key={student.id}
+                        className="transition-colors hover:bg-surface-hover"
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="font-medium text-foreground">
+                            {student.fullName}
+                          </div>
+                          <div className="text-xs text-muted">
+                            {student.age} {student.age === 1 ? "year" : "years"}
+                            {student.enrolledAt
+                              ? ` • since ${student.enrolledAt.slice(0, 10)}`
+                              : ""}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          {parentNames ? (
+                            <div className="text-sm text-foreground">
+                              {parentNames}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-subtle">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-middle text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {!student.isActive && (
+                              <Badge tone="neutral">Inactive</Badge>
+                            )}
+                            {canAssign && (
+                              <button
+                                type="button"
+                                onClick={() => withdraw(student)}
+                                disabled={busy}
+                                aria-label={`Remove ${student.fullName} from ${classroom.name}`}
+                                className="inline-flex items-center gap-1.5 rounded-control border border-danger/30 bg-danger-subtle px-2.5 py-1.5 text-xs font-semibold text-danger transition-colors hover:bg-danger hover:text-danger-foreground disabled:opacity-50"
+                              >
+                                <UserMinus size={14} />
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
 

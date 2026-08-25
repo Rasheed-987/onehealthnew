@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { handle, ok, parseBody, requirePermission } from "@/lib/api";
 import { escapeRegex } from "@/lib/teachers";
+import { classroomScopeFilter } from "@/lib/classroomScope";
 import {
   CreateClassroomSchema,
   decorateClassrooms,
@@ -16,14 +17,22 @@ const ListQuerySchema = z.object({
 
 export async function GET(request: Request) {
   return handle(async () => {
-    await requirePermission("classroom:list");
+    const session = await requirePermission("classroom:list");
 
     const url = new URL(request.url);
     const { search, page, perPage } = ListQuerySchema.parse(
       Object.fromEntries(url.searchParams),
     );
 
-    const filter: Record<string, unknown> = {};
+    /*
+     * Scoped, not filtered by a `mine=1` flag the caller opts into: every role
+     * may `classroom:list`, so without this a teacher's "my classrooms" screen
+     * and a guardian's room list are both the whole school. Making it a flag
+     * would mean the safe behaviour depends on the client remembering to ask.
+     *
+     * The super admin gets `{}` and the query is unchanged.
+     */
+    const filter: Record<string, unknown> = await classroomScopeFilter(session);
     if (search) {
       const pattern = new RegExp(escapeRegex(search), "i");
       filter.$or = [{ name: pattern }, { roomNumber: pattern }];

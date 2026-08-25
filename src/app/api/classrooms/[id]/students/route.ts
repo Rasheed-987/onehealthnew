@@ -2,9 +2,10 @@ import { z } from "zod";
 import type { NextRequest } from "next/server";
 
 import { ApiError, handle, ok, parseBody, requirePermission } from "@/lib/api";
+import { findClassroomInScope } from "@/lib/classroomScope";
 import { ageFrom } from "@/lib/students";
 import { isObjectId } from "@/lib/teachers";
-import { Classroom, Enrollment, Student } from "@/models";
+import { Classroom, Enrollment, Parent, Student, User } from "@/models";
 import { ENROLLMENT_STATUS } from "@/models/enums";
 
 /**
@@ -31,9 +32,15 @@ export async function GET(
   context: RouteContext<"/api/classrooms/[id]/students">,
 ) {
   return handle(async () => {
-    await requirePermission("classroom:list");
+    const session = await requirePermission("classroom:list");
     const { id } = await context.params;
-    const classroom = await findClassroomOr404(id);
+    /*
+     * Scoped, unlike the writes below: this response carries every child's
+     * name, age and guardian list, which is the most sensitive page in the
+     * app. `classroom:list` alone admits teachers AND guardians, so without a
+     * row-level check any signed-in parent could read any room's roster by id.
+     */
+    const classroom = await findClassroomInScope(session, id);
 
     const enrollments = await Enrollment.find({
       classroom: classroom._id,
@@ -43,6 +50,25 @@ export async function GET(
     const students = await Student.find({
       _id: { $in: enrollments.map((e) => e.student) },
     }).sort({ lastName: 1, firstName: 1 });
+
+    const parentIds = Array.from(
+      new Set(
+        students.flatMap((s) =>
+          s.guardians ? s.guardians.map((g) => String(g.parent)) : [],
+        ),
+      ),
+    );
+
+    const parents = await Parent.find({
+      _id: { $in: parentIds },
+    }).populate<{ user: InstanceType<typeof User> }>("user");
+
+    const parentNameMap = new Map(
+      parents.map((p) => [
+        String(p._id),
+        p.user ? `${p.user.firstName} ${p.user.lastName}`.trim() : "Unknown",
+      ]),
+    );
 
     const enrolledAt = new Map(
       enrollments.map((e) => [String(e.student), e.enrolledAt]),
@@ -63,6 +89,11 @@ export async function GET(
         isActive: student.isActive,
         enrolledAt:
           enrolledAt.get(String(student._id))?.toISOString() ?? null,
+        guardians: (student.guardians ?? []).map((g) => ({
+          parentId: String(g.parent),
+          name: parentNameMap.get(String(g.parent)) ?? "Unknown",
+          relationship: g.relationship,
+        })),
       })),
     });
   });

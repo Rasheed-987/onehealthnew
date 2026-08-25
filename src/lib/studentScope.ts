@@ -25,6 +25,23 @@ export async function parentProfileId(session: SessionPayload): Promise<string> 
 }
 
 /**
+ * Ids of every child this guardian is listed on.
+ *
+ * The raw ids rather than the documents, because every caller wants them for
+ * an `$in` - the rooms their children sit in, the register lines that name
+ * them, the gallery items they are tagged on.
+ */
+export async function guardedStudentIds(
+  session: SessionPayload,
+): Promise<string[]> {
+  const parentId = await parentProfileId(session);
+  const ids = await Student.find({ "guardians.parent": parentId }).distinct(
+    "_id",
+  );
+  return ids.map(String);
+}
+
+/**
  * Extra filter to AND into a student query. Staff get everything; a guardian
  * gets only the children they are listed on.
  */
