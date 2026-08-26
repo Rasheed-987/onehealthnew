@@ -23,11 +23,14 @@ import { USER_ROLE } from "@/models/enums";
  * filter to `find`. Adding a role later means changing this function and
  * nothing else.
  *
- * Deliberately NOT attendance-specific. Attendance and DailyProgress are the
- * same shape of record - one row per child per day, carrying both a `student`
- * and a denormalised `classroom` - so the same filter drives both. Duplicating
- * this per feature would mean maintaining the school's data-isolation rules in
- * two places, which is how one of them quietly rots.
+ * Deliberately NOT attendance-specific. Attendance, DailyProgress and
+ * ClinicalVisit are the same shape of record - one row naming a single child
+ * and carrying a denormalised `classroom` - so the same filter drives all
+ * three. Note that it is that SHAPE, not the cardinality, that matters here:
+ * the first two are unique per child per day, while a child can be seen by the
+ * nurse twice in a morning, and the filter is unaffected either way.
+ * Duplicating this per feature would mean maintaining the school's
+ * data-isolation rules in three places, which is how one of them quietly rots.
  *
  * The teacher case is cheap only because `classroom` is denormalised onto the
  * row (see the note on the Attendance model): the filter is `{ classroom:

@@ -52,6 +52,13 @@ export const PERMISSIONS = {
   "progress:delete": [USER_ROLE.SUPER_ADMIN],
   "progress:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
 
+  // Clinical visits. Same shape again: staff write, the home reads. A guardian
+  // must never be able to enter a symptom against their own child - the record
+  // is the school's account of what it saw and did.
+  "health:write": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
+  "health:delete": [USER_ROLE.SUPER_ADMIN],
+  "health:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
+
   // Photos and clips.
   "gallery:create": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
   "gallery:update": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],

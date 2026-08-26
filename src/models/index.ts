@@ -28,6 +28,7 @@ export {
   type IToiletEntry,
   type INapEntry,
 } from "./DailyProgress";
+export { ClinicalVisit, type IClinicalVisit } from "./ClinicalVisit";
 export { GalleryItem, type IGalleryItem } from "./GalleryItem";
 export {
   VerificationToken,

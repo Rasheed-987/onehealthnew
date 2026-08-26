@@ -8,13 +8,14 @@ import type { IClassroom, IStudent } from "@/models";
 import { ENROLLMENT_STATUS, USER_ROLE } from "@/models/enums";
 
 /**
- * The write gate for daily sheets.
+ * The write gate for records about a CHILD.
  *
  * Reading is handled entirely by `resolveRecordScope` in `recordScope.ts` -
- * DailyProgress and Attendance are the same shape of record, so they share it.
- * Writing is not shared, because the subject differs: taking a register is an
- * operation on a ROOM, while filling in a daily sheet is an operation on a
- * CHILD. This module is that one difference.
+ * Attendance, DailyProgress and ClinicalVisit are the same shape of record, so
+ * they share it. Writing is not shared, because the subject differs: taking a
+ * register is an operation on a ROOM, while filling in a daily sheet or writing
+ * up a clinical visit is an operation on a CHILD. This module is that one
+ * difference, and both child-shaped features use it.
  */
 
 /**
@@ -34,10 +35,15 @@ import { ENROLLMENT_STATUS, USER_ROLE } from "@/models/enums";
  *
  * A child with no active enrolment is a 400, not a 404: the child exists, the
  * request is just not answerable until somebody seats them.
+ *
+ * `action` only shapes the 403 wording, exactly as it does on
+ * `findClassroomToWrite`. A nurse refused a clinical visit should not be told
+ * about the daily sheet.
  */
 export async function findStudentToRecord(
   session: SessionPayload,
   studentId: string,
+  action = "fill in a daily sheet for",
 ): Promise<{ student: IStudent; classroom: IClassroom }> {
   if (!isObjectId(studentId)) {
     throw new ApiError(400, "That is not a valid student id.");
@@ -71,7 +77,7 @@ export async function findStudentToRecord(
   if (!teachesClassroom(teacherId, classroom)) {
     throw new ApiError(
       403,
-      "You can only fill in a daily sheet for a child in a classroom you are assigned to.",
+      `You can only ${action} a child in a classroom you are assigned to.`,
     );
   }
 

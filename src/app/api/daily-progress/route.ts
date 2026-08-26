@@ -155,3 +155,15 @@ export async function POST(request: NextRequest) {
     return ok({ created, record: row }, created ? 201 : 200);
   });
 }
+
+/*
+ * The same upsert under the verb some clients expect.
+ *
+ * Saving a sheet is idempotent and addressed by a natural key
+ * (`{ student, date }`), which is PUT-shaped - so POST and PUT are genuinely
+ * the same operation here and share one handler rather than two that could
+ * drift. POST stays the documented default because on the first save of the
+ * day the sheet has no id yet, and a client that thinks in PUT/`[id]` would
+ * otherwise need a round trip just to discover that.
+ */
+export const PUT = POST;

@@ -190,6 +190,103 @@ export const MEDIA_KIND = {
 export type MediaKind = (typeof MEDIA_KIND)[keyof typeof MEDIA_KIND];
 
 /**
+ * The clinical visit form, section by section.
+ *
+ * Sections 01-04 are checkbox groups: a child can arrive with a fever AND a
+ * cough, so each is an array on the record and an empty array means "nothing
+ * ticked". Section 05 is the one exclusive choice - a visit ends exactly one
+ * way - so VISIT_OUTCOME is a single required value, not a list.
+ *
+ * Sections 01 and 03 each have an "Other ..." free-text box on the form. Those
+ * are separate string fields on the record rather than members here: an enum
+ * value that carries its own text is not an enum value.
+ */
+
+/** Section 01. */
+export const FLU_SYMPTOM = {
+  FEVER: "FEVER",
+  COUGH: "COUGH",
+  RUNNY_NOSE: "RUNNY_NOSE",
+  NASAL_CONGESTION: "NASAL_CONGESTION",
+} as const;
+export type FluSymptom = (typeof FLU_SYMPTOM)[keyof typeof FLU_SYMPTOM];
+
+export const FLU_SYMPTOM_LABEL: Record<FluSymptom, string> = {
+  FEVER: "Fever",
+  COUGH: "Cough",
+  RUNNY_NOSE: "Runny Nose",
+  NASAL_CONGESTION: "Nasal Congestion",
+};
+
+/** Section 02. */
+export const OTHER_SYMPTOM = {
+  HEADACHE: "HEADACHE",
+  RASH: "RASH",
+  DIARRHEA: "DIARRHEA",
+  NAUSEA_VOMITING: "NAUSEA_VOMITING",
+} as const;
+export type OtherSymptom = (typeof OTHER_SYMPTOM)[keyof typeof OTHER_SYMPTOM];
+
+export const OTHER_SYMPTOM_LABEL: Record<OtherSymptom, string> = {
+  HEADACHE: "Headache",
+  RASH: "Rash",
+  DIARRHEA: "Diarrhea",
+  NAUSEA_VOMITING: "Nausea / Vomiting",
+};
+
+/** Section 03 - injuries and the things a nursery checks for by hand. */
+export const ADDITIONAL_SYMPTOM = {
+  NOSE_BLEEDING: "NOSE_BLEEDING",
+  HEAD_LICE: "HEAD_LICE",
+  INJURY_WOUND: "INJURY_WOUND",
+} as const;
+export type AdditionalSymptom =
+  (typeof ADDITIONAL_SYMPTOM)[keyof typeof ADDITIONAL_SYMPTOM];
+
+export const ADDITIONAL_SYMPTOM_LABEL: Record<AdditionalSymptom, string> = {
+  NOSE_BLEEDING: "Nose Bleeding",
+  HEAD_LICE: "Head Lice / Nits",
+  INJURY_WOUND: "Injury / Wound",
+};
+
+/** Section 04 - what was actually done for the child. */
+export const NURSING_CARE = {
+  REST_REASSURANCE: "REST_REASSURANCE",
+  ICE_PACK: "ICE_PACK",
+  WOUND_CARE: "WOUND_CARE",
+  SUPPORTIVE_BANDAGE: "SUPPORTIVE_BANDAGE",
+  TEPID_SPONGE_BATH: "TEPID_SPONGE_BATH",
+} as const;
+export type NursingCare = (typeof NURSING_CARE)[keyof typeof NURSING_CARE];
+
+export const NURSING_CARE_LABEL: Record<NursingCare, string> = {
+  REST_REASSURANCE: "Rest & Reassurance",
+  ICE_PACK: "Ice Pack Applied",
+  WOUND_CARE: "Wound Care",
+  SUPPORTIVE_BANDAGE: "Supportive Bandage",
+  TEPID_SPONGE_BATH: "Tepid Sponge Bath",
+};
+
+/**
+ * Section 05 - how the visit ended. Required, and deliberately ordered from
+ * least to most serious, which is also the order the table's badge tones run.
+ */
+export const VISIT_OUTCOME = {
+  RETURN_TO_CLASS: "RETURN_TO_CLASS",
+  SENT_HOME: "SENT_HOME",
+  NURSERY_CLINIC: "NURSERY_CLINIC",
+  AMBULANCE_TO_HOSPITAL: "AMBULANCE_TO_HOSPITAL",
+} as const;
+export type VisitOutcome = (typeof VISIT_OUTCOME)[keyof typeof VISIT_OUTCOME];
+
+export const VISIT_OUTCOME_LABEL: Record<VisitOutcome, string> = {
+  RETURN_TO_CLASS: "Return to Class",
+  SENT_HOME: "Sent Home",
+  NURSERY_CLINIC: "Nursery Clinic",
+  AMBULANCE_TO_HOSPITAL: "Ambulance to Hospital",
+};
+
+/**
  * Clock times inside a day - a nappy change at 08:50, a nap from 12:30.
  *
  * Stored as "HH:mm" strings rather than Dates: the owning document already
