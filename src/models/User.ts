@@ -53,6 +53,9 @@ const UserSchema = new Schema<IUser>(
       required: true,
       index: true,
     },
+
+
+    
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     phone: { type: String, trim: true },
