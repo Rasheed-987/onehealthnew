@@ -31,6 +31,12 @@ export {
 export { ClinicalVisit, type IClinicalVisit } from "./ClinicalVisit";
 export { GalleryItem, type IGalleryItem } from "./GalleryItem";
 export {
+  MessageThread,
+  type IMessageThread,
+  type IThreadReadState,
+} from "./MessageThread";
+export { Message, type IMessage } from "./Message";
+export {
   VerificationToken,
   TOKEN_TYPE,
   type IVerificationToken,

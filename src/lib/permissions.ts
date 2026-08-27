@@ -64,6 +64,16 @@ export const PERMISSIONS = {
   "gallery:update": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
   "gallery:delete": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
   "gallery:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
+
+  // Conversations between a teacher and a child's guardians.
+  //
+  // The asymmetry is the point: the super admin reads every thread, for
+  // safeguarding, but is deliberately absent from `message:send`. A reply from
+  // an unexpected sender, in a conversation a family believes is with their
+  // child's teacher, is worse than no reply - so the read-only rule lives here
+  // in the table rather than as a branch inside a handler.
+  "message:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
+  "message:send": [USER_ROLE.TEACHER, USER_ROLE.PARENT],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

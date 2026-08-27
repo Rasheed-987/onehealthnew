@@ -3,7 +3,7 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { handle, ok, parseBody } from "@/lib/api";
 import { sendPasswordResetEmail } from "@/lib/emails";
-import { issueToken } from "@/lib/tokens";
+import { hasRecentToken, issueOtpToken } from "@/lib/tokens";
 import { User } from "@/models";
 import { TOKEN_TYPE } from "@/models/VerificationToken";
 import { USER_STATUS } from "@/models/enums";
@@ -20,38 +20,43 @@ export async function POST(request: Request) {
     const user = await User.findOne({ email });
 
     /*
-     * Only ACTIVE accounts get a reset link. A SUSPENDED user must not be able
+     * Only ACTIVE accounts get an OTP. A SUSPENDED user must not be able
      * to let themselves back in, and an INVITED one has no password to reset -
      * they need their invitation resending instead.
      */
     if (user && user.status === USER_STATUS.ACTIVE) {
       try {
-        const { token } = await issueToken(
+        // Enforce 60-second cooldown to prevent spamming OTP requests
+        const isRecent = await hasRecentToken(
           user._id,
           TOKEN_TYPE.PASSWORD_RESET,
+          60 * 1000,
         );
-        await sendPasswordResetEmail({
-          to: user.email,
-          firstName: user.firstName,
-          token,
-        });
+
+        if (!isRecent) {
+          const { otp } = await issueOtpToken(
+            user._id,
+            TOKEN_TYPE.PASSWORD_RESET,
+          );
+          await sendPasswordResetEmail({
+            to: user.email,
+            firstName: user.firstName,
+            otp,
+          });
+        }
       } catch (error) {
         // Logged, never surfaced: a delivery error that reached the client
         // would confirm the address exists.
-        console.error("Password reset email failed:", error);
+        console.error("Password reset OTP email failed:", error);
       }
     }
 
     /*
      * Always the same answer, whatever happened above.
-     *
-     * Differentiating "we sent it" from "no such account" turns this endpoint
-     * into a way to enumerate which email addresses hold accounts at a
-     * nursery, which is exactly the list not to hand out.
      */
     return ok({
       message:
-        "If that email address has an account, a reset link is on its way.",
+        "If that email address has an account, a verification code is on its way.",
     });
   });
 }

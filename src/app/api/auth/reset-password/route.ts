@@ -4,13 +4,15 @@ import { connectDB } from "@/lib/db";
 import { fail, handle, ok, parseBody } from "@/lib/api";
 import { MIN_PASSWORD_LENGTH, hashPassword } from "@/lib/password";
 import { destroySession } from "@/lib/session";
-import { consumeToken, revokeTokens } from "@/lib/tokens";
+import { revokeTokens, verifyAndConsumeOtp } from "@/lib/tokens";
 import { User } from "@/models";
 import { TOKEN_TYPE } from "@/models/VerificationToken";
+import { USER_STATUS } from "@/models/enums";
 
 const ResetPasswordSchema = z
   .object({
-    token: z.string().min(1),
+    email: z.string().trim().toLowerCase().email("Enter a valid email address."),
+    otp: z.string().trim().length(6, "Verification code must be 6 digits."),
     password: z
       .string()
       .min(
@@ -24,40 +26,49 @@ const ResetPasswordSchema = z
     message: "The two passwords do not match.",
   });
 
-const DEAD_LINK = {
-  "not-found": "This reset link is not valid.",
-  expired: "This reset link has expired. Request a new one.",
-  used: "This reset link has already been used.",
-} as const;
-
 export async function POST(request: Request) {
   return handle(async () => {
     const input = await parseBody(request, ResetPasswordSchema);
     await connectDB();
 
-    const result = await consumeToken(input.token, TOKEN_TYPE.PASSWORD_RESET);
-    if (!result.ok) return fail(400, DEAD_LINK[result.reason]);
+    const user = await User.findOne({ email: input.email });
+    if (!user || user.status !== USER_STATUS.ACTIVE) {
+      return fail(400, "Invalid verification code or code has expired.");
+    }
 
-    const user = await User.findById(result.userId);
-    if (!user) return fail(400, "This reset link is no longer valid.");
+    const result = await verifyAndConsumeOtp(
+      user._id,
+      input.otp,
+      TOKEN_TYPE.PASSWORD_RESET,
+    );
+
+    if (!result.ok) {
+      if (result.reason === "invalid-otp") {
+        const remaining = result.remainingAttempts ?? 0;
+        return fail(
+          400,
+          `Invalid verification code. ${remaining > 0 ? `${remaining} attempt(s) remaining.` : "Please request a new code."}`,
+        );
+      }
+      if (result.reason === "too-many-attempts") {
+        return fail(
+          400,
+          "Too many failed attempts. Verification code locked. Please request a new code.",
+        );
+      }
+      if (result.reason === "expired") {
+        return fail(400, "This verification code has expired. Request a new one.");
+      }
+      return fail(400, "Invalid verification code or code has expired.");
+    }
 
     user.password = await hashPassword(input.password);
     user.mustChangePassword = false;
     await user.save();
 
-    // Same reasoning as accept-invite: drop the other kind, keep the spent
-    // token so a repeat click can still be told it was already used.
-    await revokeTokens(user._id, TOKEN_TYPE.INVITE);
-
-    /*
-     * Deliberately NOT signed in afterwards, unlike accepting an invitation.
-     *
-     * A reset is what someone does when they suspect their account is
-     * compromised, so this clears whatever session the browser is holding and
-     * makes them prove the new password at the sign-in screen.
-     */
+    await revokeTokens(user._id);
     await destroySession();
 
-    return ok({ success: true });
+    return ok({ message: "Password changed successfully." });
   });
 }

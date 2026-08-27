@@ -26,6 +26,7 @@ export interface IVerificationToken {
   expiresAt: Date;
   /** Set the moment the token is spent, so it cannot be replayed. */
   usedAt?: Date | null;
+  attempts?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +47,7 @@ const VerificationTokenSchema = new Schema<IVerificationToken>(
     },
     expiresAt: { type: Date, required: true },
     usedAt: { type: Date, default: null },
+    attempts: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

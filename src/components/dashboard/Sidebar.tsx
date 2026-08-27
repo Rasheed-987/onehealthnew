@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 
 import { BrandMark } from "@/components/BrandMark";
+import { useUnreadCount } from "@/components/dashboard/useUnreadCount";
 import { navFor } from "@/lib/nav";
 import type { UserRole } from "@/models/enums";
 
@@ -35,6 +36,20 @@ export function Sidebar({
   // Built here rather than passed in: each item carries its icon *component*,
   // and a function cannot cross the server -> client boundary as a prop.
   const sections = useMemo(() => navFor(role), [role]);
+
+  /*
+   * Only asked for when this role actually has the badged link. A student, who
+   * has no messaging permission, would otherwise poll an endpoint that answers
+   * 403 once a minute for as long as they stay signed in.
+   */
+  const wantsUnread = useMemo(
+    () =>
+      sections.some((section) =>
+        section.items.some((item) => item.badge === "messages"),
+      ),
+    [sections],
+  );
+  const unread = useUnreadCount(60_000, wantsUnread);
 
   return (
     <>
@@ -105,6 +120,7 @@ export function Sidebar({
                 {section.items.map((item) => {
                   const active = isActive(pathname, item.href);
                   const Icon = item.icon;
+                  const count = item.badge === "messages" ? unread : 0;
                   return (
                     <li key={item.href}>
                       <Link
@@ -120,9 +136,32 @@ export function Sidebar({
                             : "text-sidebar-foreground hover:bg-sidebar-hover",
                         ].join(" ")}
                       >
-                        <Icon size={18} className="shrink-0" />
+                        <span className="relative shrink-0">
+                          <Icon size={18} />
+                          {/* Collapsed, the label is gone and the count with
+                              it - so the icon carries a dot instead, which
+                              still says "something is waiting". */}
+                          {count > 0 && collapsed && (
+                            <span
+                              className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-sidebar"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </span>
                         {!collapsed && (
-                          <span className="truncate">{item.label}</span>
+                          <>
+                            <span className="truncate">{item.label}</span>
+                            {count > 0 && (
+                              <span className="ml-auto inline-flex min-w-5 shrink-0 justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                                {count > 99 ? "99+" : count}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {count > 0 && (
+                          <span className="sr-only">
+                            {count} unread {count === 1 ? "message" : "messages"}
+                          </span>
                         )}
                       </Link>
                     </li>

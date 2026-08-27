@@ -44,6 +44,14 @@ export const GUARDIAN_RELATIONSHIP = {
 export type GuardianRelationship =
   (typeof GUARDIAN_RELATIONSHIP)[keyof typeof GUARDIAN_RELATIONSHIP];
 
+export const GUARDIAN_RELATIONSHIP_LABEL: Record<GuardianRelationship, string> =
+  {
+    MOTHER: "Mother",
+    FATHER: "Father",
+    GUARDIAN: "Guardian",
+    OTHER: "Guardian",
+  };
+
 /**
  * A classroom has exactly one LEAD (the "Class Teacher" column in the UI) and
  * any number of ASSISTANTs (the "Additional Teachers" column).
@@ -285,6 +293,21 @@ export const VISIT_OUTCOME_LABEL: Record<VisitOutcome, string> = {
   NURSERY_CLINIC: "Nursery Clinic",
   AMBULANCE_TO_HOSPITAL: "Ambulance to Hospital",
 };
+
+/**
+ * Messaging limits.
+ *
+ * Here rather than beside the schemas because the composer needs the length cap
+ * to set `maxLength` on its textarea, and a client component cannot value-import
+ * a module that pulls in Mongoose. This file is the Mongoose-free half the
+ * browser is allowed to read.
+ */
+
+/** Longest a single message may be. Enforced by the schema and the composer. */
+export const MESSAGE_MAX_LENGTH = 4000;
+
+/** How much of the last message an inbox row shows. */
+export const PREVIEW_LENGTH = 140;
 
 /**
  * Clock times inside a day - a nappy change at 08:50, a nap from 12:30.

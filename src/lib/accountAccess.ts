@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api";
 import { sendInviteEmail, sendPasswordResetEmail } from "@/lib/emails";
-import { issueToken } from "@/lib/tokens";
+import { issueOtpToken, issueToken } from "@/lib/tokens";
 import { User, type IUser } from "@/models";
 import { TOKEN_TYPE } from "@/models/VerificationToken";
 import { USER_STATUS } from "@/models/enums";
@@ -34,12 +34,12 @@ export async function sendAccessEmail(
   }
 
   const invite = user.status === USER_STATUS.INVITED;
-  const { token, expiresAt } = await issueToken(
-    user._id,
-    invite ? TOKEN_TYPE.INVITE : TOKEN_TYPE.PASSWORD_RESET,
-  );
 
   if (invite) {
+    const { token, expiresAt } = await issueToken(
+      user._id,
+      TOKEN_TYPE.INVITE,
+    );
     await sendInviteEmail({
       to: user.email,
       firstName: user.firstName,
@@ -48,10 +48,14 @@ export async function sendAccessEmail(
       invitedBy,
     });
   } else {
+    const { otp } = await issueOtpToken(
+      user._id,
+      TOKEN_TYPE.PASSWORD_RESET,
+    );
     await sendPasswordResetEmail({
       to: user.email,
       firstName: user.firstName,
-      token,
+      otp,
     });
   }
 

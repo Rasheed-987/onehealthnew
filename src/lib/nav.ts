@@ -7,6 +7,7 @@ import {
   Heart,
   Home,
   Image,
+  Mail,
   MessageSquare,
   UserPlus,
   User,
@@ -29,6 +30,12 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   roles: readonly UserRole[];
+  /**
+   * Draws a live count on the link. Named rather than numeric because the
+   * number is fetched in the browser, and the sidebar should not have to know
+   * which href happens to be the one with unread mail behind it.
+   */
+  badge?: "messages";
 }
 
 export interface NavSection {
@@ -122,6 +129,13 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         href: "/dashboard/gallery",
         icon: Image,
         roles: EVERYONE,
+      },
+      {
+        label: "Messages",
+        href: "/dashboard/messages",
+        icon: Mail,
+        roles: EVERYONE,
+        badge: "messages",
       },
       {
         label: "Feedback",

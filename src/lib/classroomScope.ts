@@ -54,6 +54,30 @@ export async function taughtClassroomIds(
 }
 
 /**
+ * Ids of every child currently seated in a room this teacher is posted to.
+ *
+ * The teacher -> student link is indirect - there is no `assignedTeacher` on
+ * Student - so it has to be walked: teacher -> classrooms -> active enrolments
+ * -> students. Attendance, progress and clinical visits never need this because
+ * `classroom` is denormalised onto every one of those rows; messaging does,
+ * because a conversation is about a child rather than about a record.
+ *
+ * ACTIVE enrolments only, and an empty array is a real answer: a teacher posted
+ * to no rooms teaches no children.
+ */
+export async function taughtStudentIds(
+  session: SessionPayload,
+): Promise<string[]> {
+  const classroomIds = await taughtClassroomIds(session);
+  if (classroomIds.length === 0) return [];
+  const ids = await Enrollment.find({
+    classroom: { $in: classroomIds },
+    status: ENROLLMENT_STATUS.ACTIVE,
+  }).distinct("student");
+  return ids.map(String);
+}
+
+/**
  * Ids of every room this guardian's children are currently seated in.
  *
  * ACTIVE enrolments only: a room a child left in March is not a room the home
