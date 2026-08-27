@@ -53,11 +53,16 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   /*
-   * Everything except Next's own assets, the auth endpoints (which must stay
-   * reachable while signed out) and public files. `/api/auth/login` in
-   * particular would be unreachable if the redirect above applied to it.
+   * Page routes only. `/api` is excluded wholesale, not just `/api/auth`.
+   *
+   * Redirecting an unauthenticated API call to /sign-in answers it with an
+   * HTML page and a 307. A browser fetch and a mobile client both follow that
+   * redirect and then fail parsing markup as JSON, so neither can tell "your
+   * session expired" from "the server broke". Every API route already runs its
+   * own `requireSession` / `requirePermission`, which returns a clean 401 or
+   * 403 - so the proxy has nothing useful to add here and simply steps aside.
    */
   matcher: [
-    "/((?!_next/static|_next/image|api/auth|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|api|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
