@@ -56,7 +56,7 @@ export function mailFrom(): string {
  * invitation to their own domain. So it comes from configuration only.
  */
 export function appUrl(): string {
-  const url = process.env.APP_URL ?? "http://localhost:3000";
+  const url = process.env.APP_URL?.trim() || "http://localhost:3000";
   return url.replace(/\/+$/, "");
 }
 
