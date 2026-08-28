@@ -12,6 +12,7 @@ import type { AttendanceRow, AttendanceSummary } from "@/lib/attendance";
 import type { ClassroomRow } from "@/lib/classrooms";
 import type { ClinicalVisitRow, VisitSummary } from "@/lib/clinicalVisits";
 import type { DailyProgressRow, ProgressSummary } from "@/lib/dailyProgress";
+import type { FeedbackRow, FeedbackSummary } from "@/lib/feedback";
 import type { GalleryItemRow } from "@/lib/gallery";
 import type {
   MessageRecipientRow,
@@ -100,6 +101,20 @@ export const queryKeys = {
       ["clinical-visits", "list", classroom, outcome, from, to] as const,
     forStudent: (studentId: string) =>
       ["clinical-visits", "student", studentId] as const,
+  },
+  feedback: {
+    all: ["feedback"] as const,
+    list: (query: FeedbackQuery) =>
+      [
+        "feedback",
+        "list",
+        query.search,
+        query.experience,
+        query.sort,
+        query.order,
+        query.page,
+        query.perPage,
+      ] as const,
   },
   messages: {
     all: ["messages"] as const,
@@ -475,6 +490,53 @@ export function useStudentVisitsQuery(studentId: string) {
       fetchJson<{ visits: ClinicalVisitRow[] }>(
         `/api/clinical-visits?student=${studentId}`,
       ),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Feedback                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Everything the feedback table can vary, in one object.
+ *
+ * A bag rather than seven positional arguments: the table has a search box,
+ * two dropdowns, a sortable header and a pager, and a key built from seven
+ * loose parameters is one reordered call away from two screens disagreeing
+ * about what they are caching.
+ */
+export interface FeedbackQuery {
+  search: string;
+  experience: string;
+  sort: string;
+  order: "asc" | "desc";
+  page: number;
+  perPage: number;
+}
+
+/**
+ * The feedback list. Scoped server-side: every row for the super admin, a
+ * guardian's own submissions for a guardian.
+ */
+export function useFeedbackQuery(query: FeedbackQuery) {
+  return useQuery({
+    queryKey: queryKeys.feedback.list(query),
+    queryFn: () =>
+      fetchJson<{
+        feedback: FeedbackRow[];
+        summary: FeedbackSummary;
+        pagination: Pagination;
+      }>(
+        `/api/feedback?${filterParams({
+          search: query.search,
+          experience: query.experience,
+          sort: query.sort,
+          order: query.order,
+          page: String(query.page),
+          perPage: String(query.perPage),
+        })}`,
+      ),
+    ...KEEP_ROWS,
   });
 }
 

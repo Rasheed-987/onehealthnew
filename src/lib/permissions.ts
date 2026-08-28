@@ -76,6 +76,20 @@ export const PERMISSIONS = {
   // in the table rather than as a branch inside a handler.
   "message:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
   "message:send": [USER_ROLE.TEACHER, USER_ROLE.PARENT],
+
+  // Guardian feedback about the app and the nursery.
+  //
+  // Teachers are absent from all three lines, which is the whole shape of this
+  // feature. Feedback is a family's word to the school's management, and a
+  // teacher who could read it - or worse, delete it - would change what
+  // families are willing to write. It is also the mirror image of `message:*`:
+  // there the admin reads but cannot write, here the admin reads but cannot
+  // write either, and only a guardian can put a row in this collection.
+  "feedback:create": [USER_ROLE.PARENT],
+  // A guardian gets `feedback:list` for their OWN submissions only - the
+  // row-level half is the `submittedBy` filter in `resolveFeedbackScope`.
+  "feedback:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.PARENT],
+  "feedback:delete": [USER_ROLE.SUPER_ADMIN],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

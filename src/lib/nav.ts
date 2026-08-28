@@ -52,6 +52,12 @@ const EVERYONE = [
 ] as const;
 const ADMIN_ONLY = [USER_ROLE.SUPER_ADMIN] as const;
 /*
+ * Feedback is a family's word to the school's management, so it skips the
+ * middle: guardians write it, the super admin reads it, and a teacher is on
+ * neither side. Matches `feedback:list` in the permission table.
+ */
+const ADMIN_AND_HOME = [USER_ROLE.SUPER_ADMIN, USER_ROLE.PARENT] as const;
+/*
  * Nursery-age students are not expected to sign in, but the role exists and
  * login would succeed - so it gets the dashboard rather than an empty sidebar.
  */
@@ -141,7 +147,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         label: "Feedback",
         href: "/dashboard/feedback",
         icon: MessageSquare,
-        roles: EVERYONE,
+        roles: ADMIN_AND_HOME,
       },
       {
         label: "Notifications",

@@ -1,162 +1,188 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  queryKeys,
-  useMessageThreadsQuery,
-  THREAD_POLL_MS,
-  type ThreadPayload,
-} from "@/hooks/queries";
 import { useRealtime } from "@/components/dashboard/RealtimeProvider";
 import { errorMessage, fetchJson } from "@/lib/fetchJson";
-import type { MessageRow, MessageThreadRow } from "@/lib/messages";
+import type {
+  MessageRow,
+  MessageThreadRow,
+  ThreadReadReceipt,
+} from "@/lib/messages";
 import { NewThreadModal } from "./NewThreadModal";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
 
-/**
- * Messages.
- *
- * As everywhere else in the dashboard, no role branching here beyond which
- * controls render. `GET /api/messages/threads` scopes itself - every
- * conversation for an admin, their own for a teacher, and for a guardian the
- * ones about their own children - so this component draws the same two panes
- * whoever is looking at them.
- *
- * Messages arrive over the WebSocket opened by `RealtimeProvider`, which pushes
- * into this same React Query cache - so this component reads the cache and does
- * not know or care which mechanism filled it. While that socket is up the three
- * polling intervals are switched off entirely; if it cannot connect they come
- * back at their original rates and the screen behaves as it did before. That is
- * the whole of the fallback, and it is why nothing here branches on `connected`
- * beyond handing it to the queries.
- *
- * The `?after=` delta fetch is kept for exactly that fallback path, and for the
- * catch-up read on reconnect - it is what makes a dropped socket cost freshness
- * rather than messages.
- */
+const THREAD_POLL_MS = 8_000;
+const LIST_POLL_MS = 30_000;
+
+interface ThreadPayload {
+  thread: MessageThreadRow | null;
+  messages: MessageRow[];
+}
 
 export function MessagesClient({ canSend }: { canSend: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
-  const queryClient = useQueryClient();
-  const { connected } = useRealtime();
+  // Threads List State
+  const [threads, setThreads] = useState<MessageThreadRow[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsError, setThreadsError] = useState<string | null>(null);
 
-  const threadsQuery = useMessageThreadsQuery(connected);
-  const threads = threadsQuery.data?.threads ?? [];
-  const listError = threadsQuery.isError
-    ? errorMessage(threadsQuery.error, "Could not load your conversations.")
-    : null;
+  // Selected Thread State
+  const [thread, setThread] = useState<MessageThreadRow | null>(null);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadErrorState, setThreadErrorState] = useState<string | null>(null);
 
-  /**
-   * The open conversation.
-   *
-   * Opening one fetches the transcript; every poll after that asks only for
-   * messages newer than the last one held and appends them, so a quiet
-   * conversation costs an empty array every eight seconds rather than the whole
-   * history. The delta is folded into the cached value rather than kept in
-   * component state, which is what lets a conversation opened again later paint
-   * its transcript at once and then top itself up.
-   */
-  const threadQuery = useQuery({
-    queryKey: queryKeys.messages.thread(selectedId ?? ""),
-    enabled: selectedId !== null,
-    queryFn: async (): Promise<ThreadPayload> => {
-      const id = selectedId as string;
-      const held = queryClient.getQueryData<ThreadPayload>(
-        queryKeys.messages.thread(id),
+  const { connected, userId, subscribe } = useRealtime();
+
+  const messagesRef = useRef<MessageRow[]>([]);
+  messagesRef.current = messages;
+
+  const selectedIdRef = useRef<string | null>(selectedId);
+  selectedIdRef.current = selectedId;
+
+  // ---------------------------------------------------------------------------
+  // Fetch Inbox Threads List
+  // ---------------------------------------------------------------------------
+  const fetchThreads = useCallback(async () => {
+    try {
+      const data = await fetchJson<{ threads: MessageThreadRow[] }>(
+        "/api/messages/threads",
       );
-      const after = held?.messages.at(-1)?.createdAt;
+      setThreads(data.threads);
+      setThreadsError(null);
+    } catch (err) {
+      setThreadsError(errorMessage(err, "Could not load your conversations."));
+    } finally {
+      setThreadsLoading(false);
+    }
+  }, []);
 
-      const payload = await fetchJson<ThreadPayload>(
-        `/api/messages/threads/${id}` +
-          (after ? `?after=${encodeURIComponent(after)}` : ""),
-      );
-      if (!held || !after) return payload;
+  useEffect(() => {
+    void fetchThreads();
+  }, [fetchThreads]);
 
-      // The optimistic append on send can race the poll for the same message.
-      const known = new Set(held.messages.map((m) => m.id));
-      const fresh = payload.messages.filter((m) => !known.has(m.id));
-      return {
-        thread: payload.thread ?? held.thread,
-        messages:
-          fresh.length === 0 ? held.messages : [...held.messages, ...fresh],
-      };
+  // ---------------------------------------------------------------------------
+  // Fetch Selected Thread Transcript
+  // ---------------------------------------------------------------------------
+  const fetchMessages = useCallback(
+    async (id: string, isInitial = false) => {
+      if (isInitial) {
+        setThreadLoading(true);
+        setThreadErrorState(null);
+      }
+
+      const held = messagesRef.current;
+      const after = !isInitial ? held.at(-1)?.createdAt : undefined;
+
+      try {
+        const payload = await fetchJson<ThreadPayload>(
+          `/api/messages/threads/${id}` +
+            (after ? `?after=${encodeURIComponent(after)}` : ""),
+        );
+
+        setThread(payload.thread);
+        setThreadErrorState(null);
+
+        if (isInitial || !after) {
+          setMessages(payload.messages);
+        } else if (payload.messages.length > 0) {
+          setMessages((prev) => {
+            const known = new Set(prev.map((m) => m.id));
+            const fresh = payload.messages.filter((m) => !known.has(m.id));
+            return fresh.length === 0 ? prev : [...prev, ...fresh];
+          });
+        }
+      } catch (err) {
+        setThreadErrorState(
+          errorMessage(err, "Could not load this conversation."),
+        );
+      } finally {
+        if (isInitial) setThreadLoading(false);
+      }
     },
-    // Silent while the socket is up; it appends into this cache entry instead.
-    refetchInterval: connected ? false : THREAD_POLL_MS,
-    refetchIntervalInBackground: false,
-    // A conversation someone has open is never fresh enough to skip.
-    staleTime: 0,
-  });
-
-  const thread = threadQuery.data?.thread ?? null;
-  const messages = threadQuery.data?.messages ?? [];
-  const threadError =
-    sendError ??
-    (threadQuery.isError
-      ? errorMessage(threadQuery.error, "Could not load this conversation.")
-      : null);
-
-  /*
-   * Reading a conversation clears its unread, so neither the badge in the
-   * corner of this very page nor the row in the list beside it should go on
-   * claiming otherwise.
-   *
-   * The ref is what separates opening a thread from a message landing in one
-   * already open. An arrival means the inbox previews are out of date as well;
-   * an open does not, and refetching the list there would be a request for
-   * nothing. (With the socket up, an arrival has usually already invalidated
-   * the list - `invalidateQueries` on an in-flight key is deduped, so the
-   * overlap costs nothing.)
-   */
-  const newestId = messages.at(-1)?.id ?? null;
-  const lastSeen = useRef<{ threadId: string | null; messageId: string | null }>(
-    { threadId: null, messageId: null },
+    [],
   );
 
   useEffect(() => {
-    if (!selectedId || newestId === null) return;
-
-    const arrived =
-      lastSeen.current.threadId === selectedId &&
-      lastSeen.current.messageId !== newestId;
-    lastSeen.current = { threadId: selectedId, messageId: newestId };
-
-    queryClient.setQueryData<{ threads: MessageThreadRow[] }>(
-      queryKeys.messages.threads,
-      (current) =>
-        current && {
-          threads: current.threads.map((t) =>
-            t.id === selectedId ? { ...t, unreadCount: 0 } : t,
-          ),
-        },
-    );
-    void queryClient.invalidateQueries({
-      queryKey: queryKeys.messages.unreadCount,
-    });
-    if (arrived) {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.messages.threads,
-      });
+    if (!selectedId) {
+      setThread(null);
+      setMessages([]);
+      setThreadErrorState(null);
+      return;
     }
-  }, [selectedId, newestId, queryClient]);
+    void fetchMessages(selectedId, true);
+  }, [selectedId, fetchMessages]);
 
-  /*
-   * Opening a conversation is an event, not a thing to synchronise: it happens
-   * when someone clicks, and never on its own. Selecting only moves the id -
-   * the query above follows it.
-   */
+  // ---------------------------------------------------------------------------
+  // Realtime Push Event Handling via Subscription
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const unsubscribe = subscribe((event) => {
+      if (event.type === "message:new") {
+        void fetchThreads();
+
+        if (event.threadId === selectedIdRef.current) {
+          const newMsg: MessageRow = {
+            ...event.message,
+            mine: event.message.sender.id === userId,
+          };
+          setMessages((prev) =>
+            prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg],
+          );
+        }
+      } else if (event.type === "thread:read") {
+        const receipt: ThreadReadReceipt = {
+          id: event.reader.id,
+          label: event.reader.label,
+          at: event.at,
+        };
+
+        if (event.threadId === selectedIdRef.current) {
+          setThread((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  readReceipts: [
+                    receipt,
+                    ...prev.readReceipts.filter((r) => r.id !== receipt.id),
+                  ].sort((a, b) => b.at.localeCompare(a.at)),
+                }
+              : prev,
+          );
+        }
+
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === event.threadId
+              ? {
+                  ...t,
+                  readReceipts: [
+                    receipt,
+                    ...t.readReceipts.filter((r) => r.id !== receipt.id),
+                  ].sort((a, b) => b.at.localeCompare(a.at)),
+                }
+              : t,
+          ),
+        );
+      }
+    });
+
+    return () => unsubscribe();
+  }, [subscribe, userId, fetchThreads]);
+
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
   const select = useCallback((id: string | null) => {
     setSelectedId(id);
     setSendError(null);
   }, []);
 
-  /** Returns false so the composer can keep the draft when a send fails. */
   const send = useCallback(
     async (body: string): Promise<boolean> => {
       if (!selectedId) return false;
@@ -172,46 +198,33 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           return false;
         }
 
-        /*
-         * Written straight into the cache rather than waited for on the next
-         * poll: the message is already in hand, and showing your own message
-         * eight seconds after you sent it is the kind of lag a chat is judged
-         * on. The poll dedupes it by id when it comes round.
-         */
-        const message: MessageRow | undefined = payload.message;
+        const message: MessageRow | undefined = payload.data?.message ?? payload.message;
         if (message) {
-          queryClient.setQueryData<ThreadPayload>(
-            queryKeys.messages.thread(selectedId),
-            (current) =>
-              current &&
-              (current.messages.some((m) => m.id === message.id)
-                ? current
-                : { ...current, messages: [...current.messages, message] }),
+          setMessages((prev) =>
+            prev.some((m) => m.id === message.id) ? prev : [...prev, message],
           );
         }
         setSendError(null);
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.messages.threads,
-        });
+        void fetchThreads();
         return true;
       } catch {
         return false;
       }
     },
-    [selectedId, queryClient],
+    [selectedId, fetchThreads],
   );
+
+  const combinedThreadError = sendError ?? threadErrorState;
 
   return (
     <>
-      {/* Two panes side by side from `lg` up. Below that the list and the
-          conversation take turns, because neither is usable at half a phone. */}
       <div className="flex h-[calc(100dvh-15rem)] min-h-[26rem] gap-4">
         <ThreadList
           threads={threads}
           selectedId={selectedId}
           onSelect={select}
-          loading={threadsQuery.isPending}
-          error={listError}
+          loading={threadsLoading}
+          error={threadsError}
           canSend={canSend}
           onNew={() => setPickerOpen(true)}
           className={`w-full shrink-0 lg:flex lg:w-80 ${
@@ -219,14 +232,12 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           }`}
         />
 
-        {/* Keyed on the conversation, so switching threads remounts the view
-            and its half-written draft goes with the thread it belonged to. */}
         <ThreadView
           key={selectedId ?? "none"}
           thread={thread}
           messages={messages}
-          loading={selectedId !== null && threadQuery.isPending}
-          error={threadError}
+          loading={selectedId !== null && threadLoading}
+          error={combinedThreadError}
           canSend={canSend}
           onSend={send}
           onBack={() => select(null)}
@@ -241,9 +252,7 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           onOpened={(threadId) => {
             setPickerOpen(false);
             select(threadId);
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.messages.threads,
-            });
+            void fetchThreads();
           }}
         />
       )}

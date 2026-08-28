@@ -36,6 +36,7 @@ export {
   type IThreadReadState,
 } from "./MessageThread";
 export { Message, type IMessage } from "./Message";
+export { Feedback, type IFeedback } from "./Feedback";
 export {
   VerificationToken,
   TOKEN_TYPE,

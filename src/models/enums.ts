@@ -330,3 +330,43 @@ export const PREVIEW_LENGTH = 140;
  * way a Date can when the school and the server disagree about midnight.
  */
 export const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Guardian feedback about the app and the nursery.
+ *
+ * Two ratings sit side by side on the form and they are not redundant.
+ * `experience` is the word a parent would use out loud - it is what the admin
+ * table groups and skims by. `stars` is the number, which is the only one of
+ * the two you can average. Asking for both costs the parent one extra tap and
+ * saves the school from inferring a sentiment from a 3.
+ */
+export const FEEDBACK_EXPERIENCE = {
+  EXCELLENT: "EXCELLENT",
+  GOOD: "GOOD",
+  AVERAGE: "AVERAGE",
+  POOR: "POOR",
+} as const;
+export type FeedbackExperience =
+  (typeof FEEDBACK_EXPERIENCE)[keyof typeof FEEDBACK_EXPERIENCE];
+
+export const FEEDBACK_EXPERIENCE_LABEL: Record<FeedbackExperience, string> = {
+  EXCELLENT: "Excellent",
+  GOOD: "Good",
+  AVERAGE: "Average",
+  POOR: "Poor",
+};
+
+/**
+ * The star scale. One and five rather than zero and five: a submitted rating
+ * of "no stars" is indistinguishable from a rating nobody filled in, and the
+ * form makes the field required precisely so that ambiguity cannot arise.
+ */
+export const FEEDBACK_MIN_STARS = 1;
+export const FEEDBACK_MAX_STARS = 5;
+
+/**
+ * Longest a comment may be. Here rather than beside the schema for the same
+ * reason as MESSAGE_MAX_LENGTH: the composer needs it for `maxLength` on its
+ * textarea, and a client component cannot value-import a Mongoose module.
+ */
+export const FEEDBACK_MAX_LENGTH = 2000;

@@ -88,10 +88,13 @@ void app.prepare().then(() => {
       const session = await verifySessionToken(tokenFromUpgrade(req));
 
       if (!session) {
+        console.log("[WebSocket] Handshake rejected: Invalid or missing session token");
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;
       }
+
+      console.log(`[WebSocket] Client connected: User ${session.userId} (${session.role})`);
 
       wss.handleUpgrade(req, socket, head, (ws) => {
         register(ws, session.userId, session.role);
