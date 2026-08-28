@@ -5,6 +5,7 @@ import { ImagePlus } from "lucide-react";
 
 import { SelectField, TextField } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import { useClassroomRosterQuery } from "@/hooks/queries";
 import type { ClassroomRow } from "@/lib/classrooms";
 import { GALLERY_ITEM_TYPE, GALLERY_ITEM_TYPE_LABEL } from "@/models/enums";
 
@@ -16,11 +17,6 @@ import { GALLERY_ITEM_TYPE, GALLERY_ITEM_TYPE_LABEL } from "@/models/enums";
  * nobody else - so the choice is put in front of the teacher as a decision
  * with consequences spelled out, not buried as an optional field.
  */
-
-interface StudentOption {
-  id: string;
-  fullName: string;
-}
 
 export function UploadModal({
   classrooms,
@@ -35,7 +31,6 @@ export function UploadModal({
     "classroom",
   );
   const [classroom, setClassroom] = useState(classrooms[0]?.id ?? "");
-  const [roster, setRoster] = useState<StudentOption[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
@@ -48,26 +43,15 @@ export function UploadModal({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // The roster drives the per-child picker, and is also what the classroom
-  // option silently expands to - showing it makes that expansion visible.
-  useEffect(() => {
-    if (!classroom) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch(`/api/classrooms/${classroom}/students`);
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled || !response.ok) return;
-        setRoster(payload.students ?? []);
-        setPicked([]);
-      } catch {
-        // Leave the roster empty; the classroom option still works.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [classroom]);
+  /*
+   * The roster drives the per-child picker, and is also what the classroom
+   * option silently expands to - showing it makes that expansion visible.
+   *
+   * Shared with the roster panel and the clinical-visit form through the
+   * cache, so a room already opened elsewhere fills this in with no request.
+   * A failure leaves it empty; the classroom option still works.
+   */
+  const roster = useClassroomRosterQuery(classroom).data?.students ?? [];
 
   /*
    * The preview URL is made where the file is chosen rather than in an effect
@@ -207,7 +191,12 @@ export function UploadModal({
           label="Classroom"
           name="classroom"
           value={classroom}
-          onChange={(event) => setClassroom(event.target.value)}
+          onChange={(event) => {
+            setClassroom(event.target.value);
+            // The tags belonged to the room being left. Carrying them over
+            // would post this photo to another room's families.
+            setPicked([]);
+          }}
           options={classrooms.map((room) => ({
             value: room.id,
             label: room.name,

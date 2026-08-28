@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { QueryProvider } from "@/components/QueryProvider";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -28,7 +30,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background font-sans text-foreground">{children}</body>
+      {/* The provider takes `children` as a slot, so everything inside it -
+          every page, every layout - stays a server component. */}
+      <body className="min-h-full flex flex-col bg-background font-sans text-foreground">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

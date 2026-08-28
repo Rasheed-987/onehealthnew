@@ -1,10 +1,12 @@
-import { randomBytes } from "node:crypto";
 import mongoose from "mongoose";
 import { z } from "zod";
 
 import { ApiError, handle, ok, parseBody, requirePermission } from "@/lib/api";
 import { adminDisplayName, sendInviteAfterCreate } from "@/lib/accountAccess";
-import { hashPassword } from "@/lib/password";
+import {
+  createParentAccount,
+  type CreatedGuardianAccount,
+} from "@/lib/guardians";
 import { escapeRegex } from "@/lib/teachers";
 import { CreateParentSchema, toParentRow, type ParentRow } from "@/lib/parents";
 import { Parent, Student, User } from "@/models";
@@ -82,60 +84,31 @@ export async function POST(request: Request) {
       });
     }
 
-    // Placeholder only. The guardian never learns it and cannot use it - the
-    // account stays INVITED until they redeem the emailed link.
-    const hashed = await hashPassword(randomBytes(12).toString("base64url"));
-
     /*
      * User + Parent in one transaction. A failure on the second would
      * otherwise leave a User with role PARENT and no profile - invisible to
      * this screen and unreachable by any repair path.
+     *
+     * The pair is built by `createParentAccount` rather than inline, because
+     * the enrolment sheet creates guardians the same way and the two must not
+     * drift - see lib/guardians.ts.
      */
     const dbSession = await mongoose.startSession();
-    let parentId: mongoose.Types.ObjectId | null = null;
-    let userId: mongoose.Types.ObjectId | null = null;
+    let account: CreatedGuardianAccount | null = null;
     try {
       await dbSession.withTransaction(async () => {
-        const [user] = await User.create(
-          [
-            {
-              email: input.email,
-              password: hashed,
-              role: USER_ROLE.PARENT,
-              firstName: input.firstName,
-              lastName: input.lastName,
-              phone: input.phone,
-              status: USER_STATUS.INVITED,
-              createdBy: session.userId,
-            },
-          ],
-          { session: dbSession },
-        );
-
-        const [parent] = await Parent.create(
-          [
-            {
-              user: user._id,
-              occupation: input.occupation,
-              address: input.address,
-              emergencyPhone: input.emergencyPhone,
-              createdBy: session.userId,
-            },
-          ],
-          { session: dbSession },
-        );
-
-        userId = user._id;
-        parentId = parent._id;
+        account = await createParentAccount(input, session.userId, dbSession);
       });
     } finally {
       await dbSession.endSession();
     }
+    if (!account) throw new ApiError(500, "Parent could not be created.");
+    const { userId, parentId } = account as CreatedGuardianAccount;
 
     const created = await Parent.findById(parentId).populate<{
       user: InstanceType<typeof User>;
     }>("user");
-    if (!created || !userId) {
+    if (!created) {
       throw new ApiError(500, "Parent could not be created.");
     }
 
@@ -147,6 +120,7 @@ export async function POST(request: Request) {
         email: input.email,
         firstName: input.firstName,
         status: USER_STATUS.INVITED,
+        role: USER_ROLE.PARENT,
       },
       await adminDisplayName(session.userId),
     );

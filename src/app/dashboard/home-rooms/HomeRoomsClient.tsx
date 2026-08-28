@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { ClassroomForm } from "./ClassroomForm";
 import { RosterModal } from "./RosterModal";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  EMPTY_PAGINATION,
+  queryKeys,
+  useClassroomsQuery,
+  useInvalidate,
+} from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { ClassroomRow } from "@/lib/classrooms";
-
-interface Pagination {
-  page: number;
-  perPage: number;
-  total: number;
-  pageCount: number;
-}
 
 export function HomeRoomsClient({
   canDelete,
@@ -23,17 +24,8 @@ export function HomeRoomsClient({
   canDelete: boolean;
   canAssign: boolean;
 }) {
-  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    perPage: 20,
-    total: 0,
-    pageCount: 1,
-  });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -42,42 +34,26 @@ export function HomeRoomsClient({
   const [deleting, setDeleting] = useState<ClassroomRow | null>(null);
   const [viewing, setViewing] = useState<ClassroomRow | null>(null);
 
-  const load = useCallback(
-    async (currentSearch: string, currentPage: number) => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const params = new URLSearchParams({ page: String(currentPage) });
-        if (currentSearch) params.set("search", currentSearch);
-        const response = await fetch(`/api/classrooms?${params}`);
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setLoadError(payload.error ?? "Could not load homerooms.");
-          setClassrooms([]);
-          return;
-        }
-        setClassrooms(payload.classrooms);
-        setPagination(payload.pagination);
-      } catch {
-        setLoadError("Could not reach the server.");
-        setClassrooms([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
+  const invalidate = useInvalidate();
+
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const { data, isPending, isError, error } = useClassroomsQuery(
+    debouncedSearch,
+    page,
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => void load(search, page), 300);
-    return () => clearTimeout(timer);
-  }, [search, page, load]);
+  const classrooms = data?.classrooms ?? [];
+  const pagination = data?.pagination ?? EMPTY_PAGINATION;
+  const loadError = isError
+    ? errorMessage(error, "Could not load homerooms.")
+    : null;
 
   function afterSave(message: string) {
     setFormOpen(false);
     setEditing(null);
     setNotice(message);
-    void load(search, page);
+    // Teachers carry the rooms they run on their own row.
+    invalidate(queryKeys.classrooms.all, queryKeys.teachers.all);
   }
 
   async function confirmDelete() {
@@ -92,7 +68,16 @@ export function HomeRoomsClient({
       setNotice(`${deleting.name} was deleted.`);
     }
     setDeleting(null);
-    void load(search, page);
+    // A deleted room un-enrols its children and releases its teachers, so
+    // both of those lists - and everything drawn from the roster - are stale.
+    invalidate(
+      queryKeys.classrooms.all,
+      queryKeys.students.all,
+      queryKeys.teachers.all,
+      queryKeys.attendance.all,
+      queryKeys.dailyProgress.all,
+      queryKeys.weeklyProgress.all,
+    );
   }
 
   return (
@@ -160,7 +145,7 @@ export function HomeRoomsClient({
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading homerooms...</EmptyRow>
               ) : loadError ? (
                 <EmptyRow tone="danger">{loadError}</EmptyRow>
@@ -312,7 +297,6 @@ export function HomeRoomsClient({
           classroom={viewing}
           canAssign={canAssign}
           onClose={() => setViewing(null)}
-          onChanged={() => void load(search, page)}
         />
       )}
 

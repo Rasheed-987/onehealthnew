@@ -10,8 +10,23 @@ import { Schema, model, models, type Model, type Types } from "mongoose";
  */
 
 export const TOKEN_TYPE = {
-  /** First-time account setup. The user has no usable password yet. */
+  /**
+   * First-time account setup by emailed link, for staff. The user has no
+   * usable password yet.
+   */
   INVITE: "INVITE",
+  /**
+   * First-time account setup by 6-digit code, for guardians.
+   *
+   * The same job as INVITE and deliberately NOT the same type. Guardians live
+   * on the mobile app, where a link that opens a browser is the wrong door, so
+   * they get a code they ask for from inside the app instead. Two types rather
+   * than one because the lifetimes differ - a link survives a weekend, a code
+   * lasts ten minutes - and because `issueOtpToken` clears every prior token of
+   * the type it is issuing, so sharing one would let a guardian requesting a
+   * code destroy a member of staff's live invitation.
+   */
+  ACTIVATION: "ACTIVATION",
   /** "Forgot password" for an account that is already active. */
   PASSWORD_RESET: "PASSWORD_RESET",
 } as const;

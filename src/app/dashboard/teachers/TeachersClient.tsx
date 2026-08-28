@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { TeacherForm } from "./TeacherForm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  EMPTY_PAGINATION,
+  queryKeys,
+  useInvalidate,
+  useTeachersQuery,
+} from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { TeacherRow } from "@/lib/teachers";
 import { USER_STATUS } from "@/models/enums";
-
-interface Pagination {
-  page: number;
-  perPage: number;
-  total: number;
-  pageCount: number;
-}
 
 const STATUS_TONE = {
   [USER_STATUS.ACTIVE]: "success",
@@ -29,17 +30,8 @@ const STATUS_LABEL = {
 } as const;
 
 export function TeachersClient() {
-  const [teachers, setTeachers] = useState<TeacherRow[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    perPage: 20,
-    total: 0,
-    pageCount: 1,
-  });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -48,44 +40,28 @@ export function TeachersClient() {
   const [resending, setResending] = useState<TeacherRow | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
-  const load = useCallback(
-    async (currentSearch: string, currentPage: number) => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const params = new URLSearchParams({ page: String(currentPage) });
-        if (currentSearch) params.set("search", currentSearch);
-        const response = await fetch(`/api/teachers?${params}`);
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setLoadError(payload.error ?? "Could not load teachers.");
-          setTeachers([]);
-          return;
-        }
-        setTeachers(payload.teachers);
-        setPagination(payload.pagination);
-      } catch {
-        setLoadError("Could not reach the server.");
-        setTeachers([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
+  const invalidate = useInvalidate();
+
+  // Debounced: typing in the search box should not fire a request per
+  // keystroke. Paging is not debounced - a page already fetched is a cache hit.
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const { data, isPending, isError, error } = useTeachersQuery(
+    debouncedSearch,
+    page,
   );
 
-  // Debounced: typing in the search box should not fire a request per keystroke.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(search, page), 300);
-    return () => clearTimeout(timer);
-  }, [search, page, load]);
+  const teachers = data?.teachers ?? [];
+  const pagination = data?.pagination ?? EMPTY_PAGINATION;
+  const loadError = isError ? errorMessage(error, "Could not load teachers.") : null;
 
   function afterSave(result: { message: string; warning?: string }) {
     setFormOpen(false);
     setEditing(null);
     setNotice(result.message);
     setWarning(result.warning ?? null);
-    void load(search, page);
+    // Homerooms name their teachers, so their rows and the teacher picker on
+    // the homeroom form both go stale with this.
+    invalidate(queryKeys.teachers.all, queryKeys.classrooms.all);
   }
 
   async function confirmResend() {
@@ -102,7 +78,7 @@ export function TeachersClient() {
       return;
     }
     setNotice(`A ${payload.kind} email was sent to ${payload.email}.`);
-    void load(search, page);
+    invalidate(queryKeys.teachers.all);
   }
 
   async function confirmDelete() {
@@ -124,7 +100,7 @@ export function TeachersClient() {
       setNotice(`${deleting.displayName} was deleted.`);
     }
     setDeleting(null);
-    void load(search, page);
+    invalidate(queryKeys.teachers.all, queryKeys.classrooms.all);
   }
 
   return (
@@ -195,7 +171,7 @@ export function TeachersClient() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading teachers...</EmptyRow>
               ) : loadError ? (
                 <EmptyRow tone="danger">{loadError}</EmptyRow>

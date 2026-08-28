@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
-import type { ClassroomRow } from "@/lib/classrooms";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useDismissibleError } from "@/hooks/useDismissibleError";
 import {
-  formatMinutes,
-  type WeeklyChildRow,
-  type WeeklySummary,
-} from "@/lib/weeklyProgress";
+  useClassroomPickerQuery,
+  useWeeklyProgressQuery,
+} from "@/hooks/queries";
+import { formatMinutes, type WeeklyChildRow } from "@/lib/weeklyProgress";
 import { WeekModal } from "./WeekModal";
 
 /**
@@ -24,13 +25,6 @@ import { WeekModal } from "./WeekModal";
  * scopes itself: the whole school for an admin, their rooms for a teacher, and
  * for a guardian only their own children.
  */
-
-interface WeekMeta {
-  start: string;
-  end: string;
-  label: string;
-  days: string[];
-}
 
 const DAY_MS = 86_400_000;
 
@@ -51,71 +45,26 @@ function shiftWeeks(key: string, weeks: number): string {
 export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
   const [week, setWeek] = useState(thisWeekStart);
   const [classroom, setClassroom] = useState("");
-  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
-
-  const [children, setChildren] = useState<WeeklyChildRow[]>([]);
-  const [meta, setMeta] = useState<WeekMeta | null>(null);
-  const [summary, setSummary] = useState<WeeklySummary | null>(null);
-
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<WeeklyChildRow | null>(null);
 
   // Offers whatever the scoped classroom route returns: every room for an
-  // admin, the caller's own rooms for a teacher.
-  useEffect(() => {
-    if (!canRecord) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/classrooms?perPage=100");
-        const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok) setClassrooms(payload.classrooms ?? []);
-      } catch {
-        // A failed picker is not a failed page.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [canRecord]);
+  // admin, the caller's own rooms for a teacher. Shared through the cache with
+  // the other screens that carry this picker.
+  const classrooms = useClassroomPickerQuery(canRecord).data?.classrooms ?? [];
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const params = new URLSearchParams({ week });
-      if (classroom) params.set("classroom", classroom);
+  // Debounced to coalesce the burst from clicking quickly back through several
+  // weeks. Landing on one already visited is then a cache read, not a request.
+  const debouncedWeek = useDebouncedValue(week, 200);
+  const weekQuery = useWeeklyProgressQuery(debouncedWeek, classroom);
+  const { data, isPending } = weekQuery;
 
-      const response = await fetch(`/api/weekly-progress?${params}`);
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setLoadError(payload.error ?? "Could not load the week.");
-        setChildren([]);
-        setSummary(null);
-        return;
-      }
-
-      setChildren(payload.children ?? []);
-      setMeta(payload.week ?? null);
-      setSummary(payload.summary ?? null);
-    } catch {
-      setLoadError("Could not reach the server.");
-      setChildren([]);
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [week, classroom]);
-
-  // Deferred rather than called straight from the effect body: a synchronous
-  // setState there cascades a second render, and the delay coalesces the burst
-  // from clicking quickly back through several weeks.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 200);
-    return () => clearTimeout(timer);
-  }, [load]);
+  const children = data?.children ?? [];
+  const meta = data?.week ?? null;
+  const summary = data?.summary ?? null;
+  const [loadError, dismissError] = useDismissibleError(
+    weekQuery,
+    "Could not load the week.",
+  );
 
   // The current week is as far forward as it is worth going - the days after
   // today in it are already visible, and everything past it is empty.
@@ -197,7 +146,7 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
           <span>{loadError}</span>
           <button
             type="button"
-            onClick={() => setLoadError(null)}
+            onClick={dismissError}
             aria-label="Dismiss"
           >
             <X size={16} />
@@ -250,7 +199,7 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading the week...</EmptyRow>
               ) : children.length === 0 ? (
                 <EmptyRow>

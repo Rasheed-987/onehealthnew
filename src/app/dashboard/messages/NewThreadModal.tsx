@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { SelectField } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import { useMessageOptionsQuery } from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import { MESSAGE_MAX_LENGTH } from "@/models/enums";
-import type { MessageRecipientRow } from "@/lib/messages";
 
 /**
  * Starting a conversation.
@@ -29,54 +30,42 @@ export function NewThreadModal({
   /** Hands back the thread to show - existing or just created. */
   onOpened: (threadId: string, isNew: boolean) => void;
 }) {
-  const [recipients, setRecipients] = useState<MessageRecipientRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [studentId, setStudentId] = useState("");
-  const [teacherId, setTeacherId] = useState("");
+  /*
+   * Null means "not answered yet", which is what lets the sole-option default
+   * below be derived rather than written into state once the list lands. An
+   * explicit "" is an answer - the reader choosing the blank option - and
+   * overrides the default like any other.
+   */
+  const [studentChoice, setStudentChoice] = useState<string | null>(null);
+  const [teacherChoice, setTeacherChoice] = useState<string | null>(null);
   const [body, setBody] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
+  const options = useMessageOptionsQuery(open);
+  // Memoised so the identity is stable between renders - it feeds a useMemo
+  // below, which would otherwise recompute on every one.
+  const recipients = useMemo(() => options.data?.students ?? [], [options.data]);
+  const loading = options.isPending;
+  const loadError = options.isError
+    ? errorMessage(options.error, "Could not load the list.")
+    : null;
 
-    void (async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const response = await fetch("/api/messages/options");
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!response.ok) {
-          setLoadError(payload.error ?? "Could not load the list.");
-          return;
-        }
-        const rows: MessageRecipientRow[] = payload.students ?? [];
-        setRecipients(rows);
-        // Pre-select the only sensible answer when there is only one. Common
-        // for a guardian with one child in a room with one teacher.
-        if (rows.length === 1) {
-          setStudentId(rows[0].id);
-          if (rows[0].teachers.length === 1) {
-            setTeacherId(rows[0].teachers[0].id);
-          }
-        }
-      } catch {
-        if (!cancelled) setLoadError("Could not reach the server.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+  /*
+   * Pre-select the only sensible answer when there is only one - common for a
+   * guardian with one child in a room with one teacher.
+   *
+   * Read off the list rather than written into state when it arrives, so there
+   * is no moment where the form disagrees with what is on screen and no way
+   * for a refetch to reach back in and undo a choice since made.
+   */
+  const only = recipients.length === 1 ? recipients[0] : null;
+  const studentId = studentChoice ?? only?.id ?? "";
+  const teacherId =
+    teacherChoice ??
+    (only?.teachers.length === 1 ? only.teachers[0].id : "");
 
   const student = useMemo(
     () => recipients.find((r) => r.id === studentId) ?? null,
@@ -90,9 +79,9 @@ export function NewThreadModal({
    * a second answer that this answer invalidates.
    */
   function chooseStudent(id: string) {
-    setStudentId(id);
+    setStudentChoice(id);
     const next = recipients.find((r) => r.id === id) ?? null;
-    setTeacherId(
+    setTeacherChoice(
       next && next.teachers.length === 1 ? next.teachers[0].id : "",
     );
   }
@@ -204,7 +193,7 @@ export function NewThreadModal({
                 value={teacherId}
                 disabled={!student}
                 error={fieldErrors.teacher}
-                onChange={(event) => setTeacherId(event.target.value)}
+                onChange={(event) => setTeacherChoice(event.target.value)}
                 options={[
                   { value: "", label: "Choose a teacher" },
                   ...(student?.teachers ?? []).map((t) => ({

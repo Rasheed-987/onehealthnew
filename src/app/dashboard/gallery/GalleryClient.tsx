@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Trash2, Users, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import {
+  queryKeys,
+  useClassroomPickerQuery,
+  useGalleryQuery,
+  useInvalidate,
+} from "@/hooks/queries";
+import { useDismissibleError } from "@/hooks/useDismissibleError";
 import type { GalleryItemRow } from "@/lib/gallery";
-import type { ClassroomRow } from "@/lib/classrooms";
 import { GALLERY_ITEM_TYPE, GALLERY_ITEM_TYPE_LABEL } from "@/models/enums";
 import { UploadModal } from "./UploadModal";
 
@@ -31,65 +37,38 @@ export function GalleryClient({
   canCreate: boolean;
   canDelete: boolean;
 }) {
-  const [items, setItems] = useState<GalleryItemRow[]>([]);
-  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
   const [classroom, setClassroom] = useState("");
   const [type, setType] = useState("");
-
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState<GalleryItemRow | null>(null);
   const [deleting, setDeleting] = useState<GalleryItemRow | null>(null);
 
-  useEffect(() => {
-    if (!canCreate) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/classrooms?perPage=100");
-        const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok) setClassrooms(payload.classrooms ?? []);
-      } catch {
-        // A failed picker is not a failed page.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [canCreate]);
+  const invalidate = useInvalidate();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const params = new URLSearchParams();
-      if (classroom) params.set("classroom", classroom);
-      if (type) params.set("type", type);
+  const classrooms = useClassroomPickerQuery(canCreate).data?.classrooms ?? [];
 
-      const response = await fetch(`/api/gallery?${params}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setLoadError(payload.error ?? "Could not load the gallery.");
-        setItems([]);
-        return;
-      }
-      setItems(payload.items ?? []);
-    } catch {
-      setLoadError("Could not reach the server.");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [classroom, type]);
+  // Both filters are dropdowns - one change per click - so there is nothing to
+  // debounce. A combination already looked at comes back from the cache.
+  const gallery = useGalleryQuery(classroom, type);
+  const { data, isPending } = gallery;
 
-  // Deferred so the effect body does not setState synchronously.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 200);
-    return () => clearTimeout(timer);
-  }, [load]);
+  const items = data?.items ?? [];
+
+  // A failed delete and a failed load share the one dismissible line, the
+  // delete first because it is the thing that just happened.
+  const [banner, dismissBanner] = useDismissibleError(
+    gallery,
+    "Could not load the gallery.",
+  );
+  const loadError = deleteError ?? banner;
+
+  function dismissError() {
+    setDeleteError(null);
+    dismissBanner();
+  }
 
   async function confirmDelete() {
     if (!deleting) return;
@@ -98,12 +77,13 @@ export function GalleryClient({
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setLoadError(payload.error ?? "Could not remove the photo.");
+      setDeleteError(payload.error ?? "Could not remove the photo.");
     } else {
+      setDeleteError(null);
       setNotice("Photo removed. Families can no longer see it.");
     }
     setDeleting(null);
-    void load();
+    invalidate(queryKeys.gallery.all);
   }
 
   return (
@@ -162,7 +142,7 @@ export function GalleryClient({
       {loadError && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger">
           <span>{loadError}</span>
-          <button type="button" onClick={() => setLoadError(null)} aria-label="Dismiss">
+          <button type="button" onClick={dismissError} aria-label="Dismiss">
             <X size={16} />
           </button>
         </div>
@@ -177,7 +157,7 @@ export function GalleryClient({
         </div>
       )}
 
-      {loading ? (
+      {isPending ? (
         <EmptyState>Loading the gallery...</EmptyState>
       ) : items.length === 0 ? (
         <EmptyState>
@@ -251,7 +231,7 @@ export function GalleryClient({
           onSaved={(message) => {
             setUploading(false);
             setNotice(message);
-            void load();
+            invalidate(queryKeys.gallery.all);
           }}
         />
       )}

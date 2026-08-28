@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Send, Users } from "lucide-react";
 
 import { MESSAGE_MAX_LENGTH } from "@/models/enums";
@@ -60,6 +60,31 @@ export function ThreadView({
     if (!element || !pinned.current) return;
     element.scrollTop = element.scrollHeight;
   }, [messages, thread?.id]);
+
+  /*
+   * "Seen", on the last message the reader sent and nowhere else.
+   *
+   * Only the newest one carries it because a per-message tick on a long
+   * exchange is noise: read positions move forward only, so if the last one has
+   * been seen every earlier one has been too, and marking them all says nothing
+   * the bottom line does not.
+   *
+   * `readReceipts` holds every *other* participant's position. A thread can have
+   * two guardians on the family side, so this is deliberately "somebody has read
+   * it" rather than "everybody has" - naming who, in the title, is more honest
+   * than a tick that means different things in a two- and a three-person thread.
+   */
+  const lastMine = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].mine) return messages[i];
+    }
+    return null;
+  }, [messages]);
+
+  const seenBy = useMemo(() => {
+    if (!lastMine || !thread) return [];
+    return thread.readReceipts.filter((r) => r.at >= lastMine.createdAt);
+  }, [thread, lastMine]);
 
   function onScroll() {
     const element = scroller.current;
@@ -211,6 +236,20 @@ export function ThreadView({
                     {formatStamp(message.createdAt)}
                   </p>
                 </div>
+
+                {/* Only under the newest message this reader sent. */}
+                {canSend && message.mine && message.id === lastMine?.id && (
+                  <p
+                    className="mt-1 px-1 text-[11px] text-subtle"
+                    title={
+                      seenBy.length > 0
+                        ? `Read by ${seenBy.map((r) => r.label).join(", ")}`
+                        : "Delivered. Nobody has opened it yet."
+                    }
+                  >
+                    {seenBy.length > 0 ? "Seen" : "Sent"}
+                  </p>
+                )}
               </div>
             </div>
           );

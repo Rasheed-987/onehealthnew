@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { SelectField, TextField } from "@/components/ui/Field";
+import { useTeacherOptionsQuery, type TeacherOption } from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import {
   CLASSROOM_TEACHER_ROLE,
   GRADE_LEVEL,
@@ -13,11 +15,6 @@ import {
 import type { ClassroomRow } from "@/lib/classrooms";
 
 type FieldErrors = Record<string, string>;
-
-interface TeacherOption {
-  id: string;
-  name: string;
-}
 
 interface TeacherDraft {
   teacher: string;
@@ -42,8 +39,15 @@ export function ClassroomForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
-  const [options, setOptions] = useState<TeacherOption[]>([]);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
+  /*
+   * Shared with the Teachers screen through the cache, so opening this form
+   * straight after looking at that list costs nothing.
+   */
+  const teacherOptions = useTeacherOptionsQuery();
+  const options = teacherOptions.data?.teachers ?? [];
+  const optionsError = teacherOptions.isError
+    ? errorMessage(teacherOptions.error, "Could not load the teacher list.")
+    : null;
 
   // Seeded once on mount; the caller keys this component per classroom and
   // mounts it only while open, so no effect is needed to resynchronise.
@@ -64,27 +68,6 @@ export function ClassroomForm({
       })),
     ];
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/teachers/options");
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!response.ok) {
-          setOptionsError(payload.error ?? "Could not load the teacher list.");
-          return;
-        }
-        setOptions(payload.teachers);
-      } catch {
-        if (!cancelled) setOptionsError("Could not load the teacher list.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

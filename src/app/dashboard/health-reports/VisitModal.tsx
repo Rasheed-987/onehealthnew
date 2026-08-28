@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { SelectField, TextField } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import { useClassroomRosterQuery } from "@/hooks/queries";
 import type { ClassroomRow } from "@/lib/classrooms";
 import type { ClinicalVisitRow } from "@/lib/clinicalVisits";
 import {
@@ -32,11 +33,6 @@ import {
  * quietly file the visit in the wrong room.
  */
 
-interface StudentOption {
-  id: string;
-  fullName: string;
-}
-
 /** `datetime-local` wants "YYYY-MM-DDTHH:mm" in the browser's own timezone. */
 function toLocalInput(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -61,7 +57,6 @@ export function VisitModal({
   const isEdit = visit !== null;
 
   const [classroom, setClassroom] = useState(classrooms[0]?.id ?? "");
-  const [roster, setRoster] = useState<StudentOption[]>([]);
   const [student, setStudent] = useState("");
 
   const [visitedAt, setVisitedAt] = useState(
@@ -93,26 +88,16 @@ export function VisitModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // The roster narrows the child picker to one room, which is also the only
-  // set the API will accept a visit for. Not needed on an edit.
-  useEffect(() => {
-    if (isEdit || !classroom) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch(`/api/classrooms/${classroom}/students`);
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled || !response.ok) return;
-        setRoster(payload.students ?? []);
-        setStudent("");
-      } catch {
-        // Leave the roster empty; the error surfaces on save instead.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [classroom, isEdit]);
+  /*
+   * The roster narrows the child picker to one room, which is also the only
+   * set the API will accept a visit for. Not needed on an edit.
+   *
+   * Shared with the roster panel and the upload form through the cache, so
+   * reopening this on a room already looked at fills the picker with no
+   * request at all. A failure leaves it empty and surfaces on save instead.
+   */
+  const roster =
+    useClassroomRosterQuery(classroom, !isEdit).data?.students ?? [];
 
   function toggle(
     list: string[],
@@ -210,7 +195,12 @@ export function VisitModal({
                 label="Classroom"
                 name="classroom"
                 value={classroom}
-                onChange={(event) => setClassroom(event.target.value)}
+                onChange={(event) => {
+                  setClassroom(event.target.value);
+                  // The chosen child belonged to the room being left, and the
+                  // API would reject them against the new one.
+                  setStudent("");
+                }}
                 options={classrooms.map((room) => ({
                   value: room.id,
                   label: room.name,

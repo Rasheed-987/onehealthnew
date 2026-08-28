@@ -22,9 +22,12 @@ export default async function StudentsPage() {
             : "Your children and the guardians linked to them."
         }
       />
-      {/* Only a super admin may delete, so the button is not drawn for anyone
-          else - the route enforces it regardless. */}
-      <StudentsClient canDelete={can(user.role, "student:delete")} />
+      {/* Adding is staff-only and deleting is super-admin-only, so neither
+          button is drawn for anyone else - the routes enforce it regardless. */}
+      <StudentsClient
+        canCreate={can(user.role, "student:create")}
+        canDelete={can(user.role, "student:delete")}
+      />
     </>
   );
 }

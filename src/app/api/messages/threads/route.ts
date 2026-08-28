@@ -7,8 +7,11 @@ import {
   appendMessage,
   hydrateMessageRows,
   hydrateThreadRows,
+  threadParticipants,
+  toWireMessage,
 } from "@/lib/messages";
 import { resolvePair, resolveThreadScope } from "@/lib/messageScope";
+import { publish } from "@/lib/realtime/hub";
 import { MessageThread } from "@/models";
 
 /**
@@ -99,14 +102,24 @@ export async function POST(request: NextRequest) {
     // pre-send state of the document we happen to be holding.
     const fresh = (await MessageThread.findById(thread._id)) ?? thread;
     const [row] = await hydrateThreadRows([fresh], session.userId);
+    const messageRow = message
+      ? (await hydrateMessageRows([message], fresh, session.userId))[0]
+      : null;
+
+    // A conversation opened with a first message has to land on the other
+    // side now, not on their next refresh - it is the whole point of the
+    // "message this child's teacher" button.
+    if (messageRow) {
+      const participants = await threadParticipants(fresh);
+      publish(participants.map((p) => p.id), {
+        type: "message:new",
+        threadId: String(fresh._id),
+        message: toWireMessage(messageRow),
+      });
+    }
 
     return ok(
-      {
-        thread: row,
-        message: message
-          ? (await hydrateMessageRows([message], fresh, session.userId))[0]
-          : null,
-      },
+      { thread: row, message: messageRow },
       created ? 201 : 200,
     );
   });

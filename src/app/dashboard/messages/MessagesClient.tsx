@@ -1,9 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { usePoll } from "@/components/dashboard/usePoll";
-import { MESSAGES_READ_EVENT } from "@/components/dashboard/useUnreadCount";
+import {
+  queryKeys,
+  useMessageThreadsQuery,
+  THREAD_POLL_MS,
+  type ThreadPayload,
+} from "@/hooks/queries";
+import { useRealtime } from "@/components/dashboard/RealtimeProvider";
+import { errorMessage, fetchJson } from "@/lib/fetchJson";
 import type { MessageRow, MessageThreadRow } from "@/lib/messages";
 import { NewThreadModal } from "./NewThreadModal";
 import { ThreadList } from "./ThreadList";
@@ -18,152 +25,136 @@ import { ThreadView } from "./ThreadView";
  * ones about their own children - so this component draws the same two panes
  * whoever is looking at them.
  *
- * There is no websocket. New messages arrive by polling, at three different
- * rates depending on how much the reader is likely to care: the open
- * conversation is checked every eight seconds and asks only for what it has not
- * already got, the inbox every thirty, and the sidebar badge every minute. All
- * three stop while the tab is in the background - see `usePoll`.
+ * Messages arrive over the WebSocket opened by `RealtimeProvider`, which pushes
+ * into this same React Query cache - so this component reads the cache and does
+ * not know or care which mechanism filled it. While that socket is up the three
+ * polling intervals are switched off entirely; if it cannot connect they come
+ * back at their original rates and the screen behaves as it did before. That is
+ * the whole of the fallback, and it is why nothing here branches on `connected`
+ * beyond handing it to the queries.
+ *
+ * The `?after=` delta fetch is kept for exactly that fallback path, and for the
+ * catch-up read on reconnect - it is what makes a dropped socket cost freshness
+ * rather than messages.
  */
 
-const THREAD_POLL_MS = 8_000;
-const LIST_POLL_MS = 30_000;
-
 export function MessagesClient({ canSend }: { canSend: boolean }) {
-  const [threads, setThreads] = useState<MessageThreadRow[]>([]);
-  const [listLoading, setListLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
-
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [thread, setThread] = useState<MessageThreadRow | null>(null);
-  const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [threadLoading, setThreadLoading] = useState(false);
-  const [threadError, setThreadError] = useState<string | null>(null);
-
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+  const { connected } = useRealtime();
+
+  const threadsQuery = useMessageThreadsQuery(connected);
+  const threads = threadsQuery.data?.threads ?? [];
+  const listError = threadsQuery.isError
+    ? errorMessage(threadsQuery.error, "Could not load your conversations.")
+    : null;
+
+  /**
+   * The open conversation.
+   *
+   * Opening one fetches the transcript; every poll after that asks only for
+   * messages newer than the last one held and appends them, so a quiet
+   * conversation costs an empty array every eight seconds rather than the whole
+   * history. The delta is folded into the cached value rather than kept in
+   * component state, which is what lets a conversation opened again later paint
+   * its transcript at once and then top itself up.
+   */
+  const threadQuery = useQuery({
+    queryKey: queryKeys.messages.thread(selectedId ?? ""),
+    enabled: selectedId !== null,
+    queryFn: async (): Promise<ThreadPayload> => {
+      const id = selectedId as string;
+      const held = queryClient.getQueryData<ThreadPayload>(
+        queryKeys.messages.thread(id),
+      );
+      const after = held?.messages.at(-1)?.createdAt;
+
+      const payload = await fetchJson<ThreadPayload>(
+        `/api/messages/threads/${id}` +
+          (after ? `?after=${encodeURIComponent(after)}` : ""),
+      );
+      if (!held || !after) return payload;
+
+      // The optimistic append on send can race the poll for the same message.
+      const known = new Set(held.messages.map((m) => m.id));
+      const fresh = payload.messages.filter((m) => !known.has(m.id));
+      return {
+        thread: payload.thread ?? held.thread,
+        messages:
+          fresh.length === 0 ? held.messages : [...held.messages, ...fresh],
+      };
+    },
+    // Silent while the socket is up; it appends into this cache entry instead.
+    refetchInterval: connected ? false : THREAD_POLL_MS,
+    refetchIntervalInBackground: false,
+    // A conversation someone has open is never fresh enough to skip.
+    staleTime: 0,
+  });
+
+  const thread = threadQuery.data?.thread ?? null;
+  const messages = threadQuery.data?.messages ?? [];
+  const threadError =
+    sendError ??
+    (threadQuery.isError
+      ? errorMessage(threadQuery.error, "Could not load this conversation.")
+      : null);
 
   /*
-   * The newest message this screen has seen, held in a ref rather than state so
-   * the poll can read it without becoming a new closure - and therefore a new
-   * interval - on every message that arrives.
+   * Reading a conversation clears its unread, so neither the badge in the
+   * corner of this very page nor the row in the list beside it should go on
+   * claiming otherwise.
+   *
+   * The ref is what separates opening a thread from a message landing in one
+   * already open. An arrival means the inbox previews are out of date as well;
+   * an open does not, and refetching the list there would be a request for
+   * nothing. (With the socket up, an arrival has usually already invalidated
+   * the list - `invalidateQueries` on an in-flight key is deduped, so the
+   * overlap costs nothing.)
    */
-  const newestAt = useRef<string | null>(null);
+  const newestId = messages.at(-1)?.id ?? null;
+  const lastSeen = useRef<{ threadId: string | null; messageId: string | null }>(
+    { threadId: null, messageId: null },
+  );
 
-  const loadThreads = useCallback(async () => {
-    try {
-      const response = await fetch("/api/messages/threads");
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setListError(payload.error ?? "Could not load your conversations.");
-        setThreads([]);
-        return;
-      }
-      setListError(null);
-      setThreads(payload.threads ?? []);
-    } catch {
-      setListError("Could not reach the server.");
-    } finally {
-      setListLoading(false);
-    }
-  }, []);
-
-  // Deferred so the effect body does not setState synchronously.
   useEffect(() => {
-    const timer = setTimeout(() => void loadThreads(), 0);
-    return () => clearTimeout(timer);
-  }, [loadThreads]);
+    if (!selectedId || newestId === null) return;
 
-  usePoll(loadThreads, LIST_POLL_MS);
+    const arrived =
+      lastSeen.current.threadId === selectedId &&
+      lastSeen.current.messageId !== newestId;
+    lastSeen.current = { threadId: selectedId, messageId: newestId };
 
-  /** The full transcript. Runs when a conversation is opened. */
-  const openThread = useCallback(async (id: string) => {
-    setThreadLoading(true);
-    setThreadError(null);
-    newestAt.current = null;
-
-    try {
-      const response = await fetch(`/api/messages/threads/${id}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setThreadError(payload.error ?? "Could not load this conversation.");
-        setThread(null);
-        setMessages([]);
-        return;
-      }
-
-      const rows: MessageRow[] = payload.messages ?? [];
-      setThread(payload.thread ?? null);
-      setMessages(rows);
-      newestAt.current = rows.at(-1)?.createdAt ?? null;
-
-      // Opening a conversation clears its unread, so the badge in the corner of
-      // this very page should not go on claiming otherwise for another minute.
-      window.dispatchEvent(new Event(MESSAGES_READ_EVENT));
-      setThreads((current) =>
-        current.map((t) => (t.id === id ? { ...t, unreadCount: 0 } : t)),
-      );
-    } catch {
-      setThreadError("Could not reach the server.");
-    } finally {
-      setThreadLoading(false);
+    queryClient.setQueryData<{ threads: MessageThreadRow[] }>(
+      queryKeys.messages.threads,
+      (current) =>
+        current && {
+          threads: current.threads.map((t) =>
+            t.id === selectedId ? { ...t, unreadCount: 0 } : t,
+          ),
+        },
+    );
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.messages.unreadCount,
+    });
+    if (arrived) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.messages.threads,
+      });
     }
-  }, []);
+  }, [selectedId, newestId, queryClient]);
 
   /*
    * Opening a conversation is an event, not a thing to synchronise: it happens
-   * when someone clicks, and never on its own. So it hangs off the click rather
-   * than off an effect watching `selectedId`.
+   * when someone clicks, and never on its own. Selecting only moves the id -
+   * the query above follows it.
    */
-  const select = useCallback(
-    (id: string | null) => {
-      setSelectedId(id);
-      if (id === null) {
-        setThread(null);
-        setMessages([]);
-        newestAt.current = null;
-        return;
-      }
-      void openThread(id);
-    },
-    [openThread],
-  );
-
-  /**
-   * The live half. Asks only for messages newer than the last one on screen, so
-   * a quiet conversation costs an empty array every eight seconds rather than
-   * the whole transcript.
-   */
-  const pollThread = useCallback(async () => {
-    const id = selectedId;
-    if (!id) return;
-
-    try {
-      const params = newestAt.current
-        ? `?after=${encodeURIComponent(newestAt.current)}`
-        : "";
-      const response = await fetch(`/api/messages/threads/${id}${params}`);
-      if (!response.ok) return; // A failed poll is not a failed screen.
-
-      const payload = await response.json().catch(() => ({}));
-      const incoming: MessageRow[] = payload.messages ?? [];
-      if (payload.thread) setThread(payload.thread);
-      if (incoming.length === 0) return;
-
-      setMessages((current) => {
-        // The optimistic append on send can race the poll for the same message.
-        const known = new Set(current.map((m) => m.id));
-        const fresh = incoming.filter((m) => !known.has(m.id));
-        return fresh.length === 0 ? current : [...current, ...fresh];
-      });
-      newestAt.current = incoming.at(-1)?.createdAt ?? newestAt.current;
-
-      window.dispatchEvent(new Event(MESSAGES_READ_EVENT));
-      void loadThreads();
-    } catch {
-      // Offline. The next tick tries again.
-    }
-  }, [selectedId, loadThreads]);
-
-  usePoll(pollThread, THREAD_POLL_MS, selectedId !== null);
+  const select = useCallback((id: string | null) => {
+    setSelectedId(id);
+    setSendError(null);
+  }, []);
 
   /** Returns false so the composer can keep the draft when a send fails. */
   const send = useCallback(
@@ -177,27 +168,37 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          setThreadError(payload.error ?? "Could not send that message.");
+          setSendError(payload.error ?? "Could not send that message.");
           return false;
         }
 
+        /*
+         * Written straight into the cache rather than waited for on the next
+         * poll: the message is already in hand, and showing your own message
+         * eight seconds after you sent it is the kind of lag a chat is judged
+         * on. The poll dedupes it by id when it comes round.
+         */
         const message: MessageRow | undefined = payload.message;
         if (message) {
-          setMessages((current) =>
-            current.some((m) => m.id === message.id)
-              ? current
-              : [...current, message],
+          queryClient.setQueryData<ThreadPayload>(
+            queryKeys.messages.thread(selectedId),
+            (current) =>
+              current &&
+              (current.messages.some((m) => m.id === message.id)
+                ? current
+                : { ...current, messages: [...current.messages, message] }),
           );
-          newestAt.current = message.createdAt;
         }
-        setThreadError(null);
-        void loadThreads();
+        setSendError(null);
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.threads,
+        });
         return true;
       } catch {
         return false;
       }
     },
-    [selectedId, loadThreads],
+    [selectedId, queryClient],
   );
 
   return (
@@ -209,7 +210,7 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           threads={threads}
           selectedId={selectedId}
           onSelect={select}
-          loading={listLoading}
+          loading={threadsQuery.isPending}
           error={listError}
           canSend={canSend}
           onNew={() => setPickerOpen(true)}
@@ -224,7 +225,7 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           key={selectedId ?? "none"}
           thread={thread}
           messages={messages}
-          loading={threadLoading}
+          loading={selectedId !== null && threadQuery.isPending}
           error={threadError}
           canSend={canSend}
           onSend={send}
@@ -240,7 +241,9 @@ export function MessagesClient({ canSend }: { canSend: boolean }) {
           onOpened={(threadId) => {
             setPickerOpen(false);
             select(threadId);
-            void loadThreads();
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.messages.threads,
+            });
           }}
         />
       )}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git --no-pager diff --no-color \"src/app/api/students/route.ts\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -m 90 -X POST http://127.0.0.1:3000/api/auth/request-code -H \"Content-Type: application/json\" -d '{\"email\":\"otp-flow-check@example.invalid\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 90 -X POST http://127.0.0.1:3111/api/auth/request-code -H \"Content-Type: application/json\" -d '{\"email\":\"otp-flow-check@example.invalid\"}' -w \" HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 60 -X POST http://127.0.0.1:3111/api/auth/request-code -H \"Content-Type: application/json\" -d '{\"email\":\"nobody-at-all@example.invalid\"}' -w \" HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 60 -X POST http://127.0.0.1:3111/api/auth/activate -H \"Content-Type: application/json\" -d '{\"email\":\"otp-flow-check@example.invalid\",\"otp\":\"123456\",\"password\":\"correct-horse-battery\",\"confirmPassword\":\"correct-horse-battery\"}' -w \" HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 60 -X POST http://127.0.0.1:3111/api/auth/login -H \"Content-Type: application/json\" -H \"X-Auth-Mode: token\" -d '{\"email\":\"otp-flow-check@example.invalid\",\"password\":\"correct-horse-battery\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(sed -E 's/\\(\"token\":\"\\)[^\"]{20,}/\\\\1<JWT>/')",
+      "Bash(curl -s -m 60 -X POST http://127.0.0.1:3111/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"otp-flow-check@example.invalid\",\"password\":\"whatever\"}' -w \" HTTP %{http_code}\\\\n\")"
+    ]
+  }
+}

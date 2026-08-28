@@ -1,11 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { HeartPulse, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
-import type { ClassroomRow } from "@/lib/classrooms";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  queryKeys,
+  useClassroomPickerQuery,
+  useClinicalVisitsQuery,
+  useInvalidate,
+} from "@/hooks/queries";
+import { useDismissibleError } from "@/hooks/useDismissibleError";
 import type { ClinicalVisitRow, VisitSummary } from "@/lib/clinicalVisits";
 import {
   VISIT_OUTCOME,
@@ -46,19 +53,14 @@ export function HealthReportsClient({
   canRecord: boolean;
   canDelete: boolean;
 }) {
-  const [visits, setVisits] = useState<ClinicalVisitRow[]>([]);
-  const [summary, setSummary] = useState<VisitSummary>(EMPTY_SUMMARY);
-  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
-
   const [search, setSearch] = useState("");
   const [classroom, setClassroom] = useState("");
   const [outcome, setOutcome] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [recording, setRecording] = useState(false);
   const [editing, setEditing] = useState<ClinicalVisitRow | null>(null);
@@ -67,57 +69,40 @@ export function HealthReportsClient({
   >(null);
   const [deleting, setDeleting] = useState<ClinicalVisitRow | null>(null);
 
+  const invalidate = useInvalidate();
+
   // The classroom picker. Guardians get no rooms back and simply see no filter.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/classrooms?perPage=100");
-        const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok) setClassrooms(payload.classrooms ?? []);
-      } catch {
-        // A failed picker is not a failed page.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const classrooms = useClassroomPickerQuery().data?.classrooms ?? [];
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const params = new URLSearchParams();
-      if (classroom) params.set("classroom", classroom);
-      if (outcome) params.set("outcome", outcome);
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
+  // The two date boxes are the only controls that can be typed into; the
+  // dropdowns change once per click and go straight through.
+  const debouncedFrom = useDebouncedValue(from, 300);
+  const debouncedTo = useDebouncedValue(to, 300);
+  const records = useClinicalVisitsQuery(
+    classroom,
+    outcome,
+    debouncedFrom,
+    debouncedTo,
+  );
+  const { data, isPending } = records;
 
-      const response = await fetch(`/api/clinical-visits?${params}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setLoadError(payload.error ?? "Could not load the health records.");
-        setVisits([]);
-        setSummary(EMPTY_SUMMARY);
-        return;
-      }
-      setVisits(payload.visits ?? []);
-      setSummary(payload.summary ?? EMPTY_SUMMARY);
-    } catch {
-      setLoadError("Could not reach the server.");
-      setVisits([]);
-      setSummary(EMPTY_SUMMARY);
-    } finally {
-      setLoading(false);
-    }
-  }, [classroom, outcome, from, to]);
+  // Memoised so the identity is stable between renders - it feeds the name
+  // filter below, which would otherwise recompute on every one.
+  const visits = useMemo(() => data?.visits ?? [], [data]);
+  const summary = data?.summary ?? EMPTY_SUMMARY;
 
-  // Deferred so the effect body does not setState synchronously.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 300);
-    return () => clearTimeout(timer);
-  }, [load]);
+  // A failed delete and a failed load share the one dismissible line, the
+  // delete first because it is the thing that just happened.
+  const [banner, dismissBanner] = useDismissibleError(
+    records,
+    "Could not load the health records.",
+  );
+  const loadError = deleteError ?? banner;
+
+  function dismissError() {
+    setDeleteError(null);
+    dismissBanner();
+  }
 
   /*
    * The name search runs here rather than as a query param: the child's name
@@ -139,12 +124,13 @@ export function HealthReportsClient({
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setLoadError(payload.error ?? "Could not remove the visit.");
+      setDeleteError(payload.error ?? "Could not remove the visit.");
     } else {
+      setDeleteError(null);
       setNotice("Visit removed.");
     }
     setDeleting(null);
-    void load();
+    invalidate(queryKeys.clinicalVisits.all);
   }
 
   return (
@@ -225,7 +211,7 @@ export function HealthReportsClient({
       {loadError && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/25 bg-danger-subtle px-3 py-2 text-sm text-danger">
           <span>{loadError}</span>
-          <button type="button" onClick={() => setLoadError(null)} aria-label="Dismiss">
+          <button type="button" onClick={dismissError} aria-label="Dismiss">
             <X size={14} />
           </button>
         </div>
@@ -261,7 +247,7 @@ export function HealthReportsClient({
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading the health records...</EmptyRow>
               ) : shown.length === 0 ? (
                 <EmptyRow>
@@ -361,7 +347,7 @@ export function HealthReportsClient({
             setRecording(false);
             setEditing(null);
             setNotice(message);
-            void load();
+            invalidate(queryKeys.clinicalVisits.all);
           }}
         />
       )}

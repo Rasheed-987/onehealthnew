@@ -18,8 +18,10 @@ export const PERMISSIONS = {
   "parent:update": [USER_ROLE.SUPER_ADMIN],
   "parent:delete": [USER_ROLE.SUPER_ADMIN],
 
-  // Admins and teachers add any student; a parent may add their own children.
-  "student:create": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
+  // Enrolling a child is the school's act, not the home's: only staff add
+  // students. A guardian keeps `student:update` so they can correct their own
+  // child's details, but the record has to exist first.
+  "student:create": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
   "student:update": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],
   "student:delete": [USER_ROLE.SUPER_ADMIN],
   "student:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER, USER_ROLE.PARENT],

@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { Types } from "mongoose";
 
+import { User } from "@/models";
 import {
   TOKEN_TYPE,
   VerificationToken,
@@ -15,12 +16,66 @@ import {
 const LIFETIME_MS: Record<TokenType, number> = {
   // Long enough to survive a weekend and a spam folder.
   [TOKEN_TYPE.INVITE]: 7 * 24 * 60 * 60 * 1000,
-  // Short on purpose for OTPs: 10 minutes.
+  /*
+   * Short on purpose for OTPs: 10 minutes.
+   *
+   * An activation code can afford to be as short as a reset code because it is
+   * pulled, not pushed - the guardian asks for it from the app seconds before
+   * typing it, rather than finding it in a mail sent whenever an administrator
+   * happened to create the account. That is the whole reason the account-created
+   * email carries no code.
+   */
+  [TOKEN_TYPE.ACTIVATION]: 10 * 60 * 1000,
   [TOKEN_TYPE.PASSWORD_RESET]: 10 * 60 * 1000,
 };
 
 /** MAX invalid OTP attempts before token is locked out */
 export const MAX_OTP_ATTEMPTS = 5;
+
+/**
+ * Most emailed codes one account can ask for in a rolling day.
+ *
+ * `MAX_OTP_ATTEMPTS` is five guesses per *issued* code, not five in total -
+ * `issueOtpToken` resets `attempts` every time. So the 60-second cooldown alone
+ * would still permit ~1,440 codes a day and ~7,200 guesses against a
+ * 1,000,000-wide space, which is a real chance of a hit over a few weeks
+ * against one known address. This cap is what closes that.
+ */
+export const MAX_CODE_REQUESTS_PER_DAY = 10;
+const CODE_REQUEST_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Claims one of today's code requests, or reports the allowance spent.
+ *
+ * Two updates rather than a read-then-write: the second one carries the limit
+ * in its own filter, so the check and the increment are a single atomic
+ * operation and two simultaneous requests cannot both claim the last slot.
+ */
+export async function claimCodeRequest(
+  userId: Types.ObjectId | string,
+): Promise<boolean> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - CODE_REQUEST_WINDOW_MS);
+
+  // Open a fresh window if there has never been one or the last has run out.
+  await User.updateOne(
+    {
+      _id: userId,
+      $or: [
+        { codeRequestWindowAt: null },
+        { codeRequestWindowAt: { $exists: false } },
+        { codeRequestWindowAt: { $lte: cutoff } },
+      ],
+    },
+    { $set: { codeRequestCount: 0, codeRequestWindowAt: now } },
+  );
+
+  const claimed = await User.updateOne(
+    { _id: userId, codeRequestCount: { $lt: MAX_CODE_REQUESTS_PER_DAY } },
+    { $inc: { codeRequestCount: 1 } },
+  );
+  return claimed.modifiedCount === 1;
+}
 
 /**
  * 256 bits, URL-safe. Long enough that guessing is not a threat model.

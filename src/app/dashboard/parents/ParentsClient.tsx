@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { ParentForm } from "./ParentForm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  EMPTY_PAGINATION,
+  queryKeys,
+  useInvalidate,
+  useParentsQuery,
+} from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { ParentRow } from "@/lib/parents";
 import { GUARDIAN_RELATIONSHIP, USER_STATUS } from "@/models/enums";
-
-interface Pagination {
-  page: number;
-  perPage: number;
-  total: number;
-  pageCount: number;
-}
 
 const STATUS_TONE = {
   [USER_STATUS.ACTIVE]: "success",
@@ -36,17 +37,8 @@ const RELATIONSHIP_LABEL: Record<string, string> = {
 };
 
 export function ParentsClient() {
-  const [parents, setParents] = useState<ParentRow[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    perPage: 20,
-    total: 0,
-    pageCount: 1,
-  });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -55,44 +47,28 @@ export function ParentsClient() {
   const [deleting, setDeleting] = useState<ParentRow | null>(null);
   const [resending, setResending] = useState<ParentRow | null>(null);
 
-  const load = useCallback(
-    async (currentSearch: string, currentPage: number) => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const params = new URLSearchParams({ page: String(currentPage) });
-        if (currentSearch) params.set("search", currentSearch);
-        const response = await fetch(`/api/parents?${params}`);
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setLoadError(payload.error ?? "Could not load parents.");
-          setParents([]);
-          return;
-        }
-        setParents(payload.parents);
-        setPagination(payload.pagination);
-      } catch {
-        setLoadError("Could not reach the server.");
-        setParents([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
+  const invalidate = useInvalidate();
+
+  // Debounced: typing should not fire a request per keystroke. Paging is not -
+  // a page already fetched comes straight back from the cache.
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const { data, isPending, isError, error } = useParentsQuery(
+    debouncedSearch,
+    page,
   );
 
-  // Debounced: typing should not fire a request per keystroke.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(search, page), 300);
-    return () => clearTimeout(timer);
-  }, [search, page, load]);
+  const parents = data?.parents ?? [];
+  const pagination = data?.pagination ?? EMPTY_PAGINATION;
+  const loadError = isError ? errorMessage(error, "Could not load parents.") : null;
 
   function afterSave(result: { message: string; warning?: string }) {
     setFormOpen(false);
     setEditing(null);
     setNotice(result.message);
     setWarning(result.warning ?? null);
-    void load(search, page);
+    // Children carry their guardians on the row, so the student list is stale
+    // the moment a guardian is renamed.
+    invalidate(queryKeys.parents.all, queryKeys.students.all);
   }
 
   async function confirmResend() {
@@ -109,7 +85,7 @@ export function ParentsClient() {
       return;
     }
     setNotice(`A ${payload.kind} email was sent to ${payload.email}.`);
-    void load(search, page);
+    invalidate(queryKeys.parents.all);
   }
 
   async function confirmDelete() {
@@ -131,7 +107,7 @@ export function ParentsClient() {
       setNotice(`${deleting.fullName} was deleted.`);
     }
     setDeleting(null);
-    void load(search, page);
+    invalidate(queryKeys.parents.all, queryKeys.students.all);
   }
 
   return (
@@ -198,7 +174,7 @@ export function ParentsClient() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading parents...</EmptyRow>
               ) : loadError ? (
                 <EmptyRow tone="danger">{loadError}</EmptyRow>

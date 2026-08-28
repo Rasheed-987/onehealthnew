@@ -7,8 +7,11 @@ import {
   hydrateMessageRows,
   hydrateThreadRows,
   markThreadRead,
+  threadParticipants,
+  toWireMessage,
 } from "@/lib/messages";
 import { assertCanPost, findThreadInScope } from "@/lib/messageScope";
+import { publish, publishRead } from "@/lib/realtime/hub";
 import { Message, MessageThread } from "@/models";
 
 /**
@@ -68,15 +71,36 @@ export async function GET(
 
     /*
      * Opening a conversation is reading it. `markThreadRead` no-ops when this
-     * reader was already up to date, which is what keeps an 8-second poll on a
-     * quiet thread from writing to Mongo all day.
+     * reader was already up to date - and returns null when it does, which is
+     * what keeps a re-opened thread from emitting a redundant receipt.
      */
-    await markThreadRead(thread, session.userId);
+    const readAt = await markThreadRead(thread, session.userId);
 
     // Re-read so `unreadCount` reflects the mark above rather than the state
     // this request arrived in.
     const fresh = (await MessageThread.findById(thread._id)) ?? thread;
     const [row] = await hydrateThreadRows([fresh], session.userId);
+
+    /*
+     * Tell the other side, so their "Sent" becomes "Seen" without either of
+     * them asking again. Participants only - an administrator reading a
+     * family's thread is not a read receipt anyone is owed.
+     */
+    if (readAt) {
+      const participants = await threadParticipants(fresh);
+      const me = participants.find((p) => p.id === String(session.userId));
+      if (me) {
+        publishRead(
+          participants.filter((p) => p.id !== me.id).map((p) => p.id),
+          {
+            type: "thread:read",
+            threadId: String(fresh._id),
+            reader: { id: me.id, label: me.label },
+            at: readAt.toISOString(),
+          },
+        );
+      }
+    }
 
     return ok({
       thread: row,
@@ -102,6 +126,15 @@ export async function POST(
     const input = await parseBody(request, SendMessageSchema);
     const message = await appendMessage(thread, session, input.body);
     const [row] = await hydrateMessageRows([message], thread, session.userId);
+
+    // The sender is included: they may have this same conversation open in
+    // another tab, and the client dedupes by id.
+    const participants = await threadParticipants(thread);
+    publish(participants.map((p) => p.id), {
+      type: "message:new",
+      threadId: String(thread._id),
+      message: toWireMessage(row),
+    });
 
     return ok({ message: row }, 201);
   });

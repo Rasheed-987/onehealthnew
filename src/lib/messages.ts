@@ -71,6 +71,14 @@ export interface ThreadParticipantRow {
   label: string;
 }
 
+/** Where one other participant has read up to. The raw material for "Seen". */
+export interface ThreadReadReceipt {
+  /** The reader's **User** id - `readState` is keyed on accounts, not profiles. */
+  id: string;
+  label: string;
+  at: string;
+}
+
 export interface MessageThreadRow {
   id: string;
   student: { id: string; fullName: string };
@@ -80,6 +88,16 @@ export interface MessageThreadRow {
   guardians: ThreadParticipantRow[];
   lastMessage: { preview: string; at: string; mine: boolean } | null;
   unreadCount: number;
+  /**
+   * Everyone *except* the reader, and where each of them has got to. A message
+   * of mine is "Seen" once one of these sits at or past it.
+   *
+   * Participants only. A super admin reading a thread has their position
+   * recorded like anyone else - their unread badge depends on it - but they are
+   * not on either side of the conversation, and surfacing them here would tell
+   * a family that someone in the office had been reading their mail.
+   */
+  readReceipts: ThreadReadReceipt[];
   updatedAt: string;
 }
 
@@ -259,6 +277,25 @@ export async function hydrateThreadRows(
     const teacher = teacherMap.get(String(thread.teacher));
     const classroom = classroomMap.get(String(thread.classroom));
 
+    /*
+     * Keyed on User id, because that is what `readState` records. The rows
+     * above are keyed on profile ids - a Teacher and a Parent - which is
+     * exactly the mismatch this map exists to bridge.
+     */
+    const labelByUser = new Map<string, string>();
+    if (teacher) {
+      const user = userMap.get(String(teacher.user));
+      labelByUser.set(String(teacher.user), teacherLabel(teacher, user));
+    }
+    for (const guardian of student?.guardians ?? []) {
+      const parent = parentMap.get(String(guardian.parent));
+      if (!parent) continue;
+      labelByUser.set(
+        String(parent.user),
+        guardianLabel(userMap.get(String(parent.user)), guardian.relationship),
+      );
+    }
+
     return {
       id: String(thread._id),
       student: {
@@ -295,9 +332,89 @@ export async function hydrateThreadRows(
           }
         : null,
       unreadCount: unread.get(String(thread._id)) ?? 0,
+      readReceipts: thread.readState
+        .filter((r) => String(r.user) !== String(viewerId))
+        // Anyone not in the map is not a participant - which is how the super
+        // admin's own read position stays out of the family's view.
+        .filter((r) => labelByUser.has(String(r.user)))
+        .map((r) => ({
+          id: String(r.user),
+          label: labelByUser.get(String(r.user)) as string,
+          at: r.lastReadAt.toISOString(),
+        }))
+        .sort((a, b) => b.at.localeCompare(a.at)),
       updatedAt: thread.updatedAt.toISOString(),
     };
   });
+}
+
+/**
+ * Everyone on either side of a thread, as accounts rather than profiles.
+ *
+ * This is the fan-out list: who has to be told when a message lands, and whose
+ * read position is anybody else's business. Resolved from the thread key the
+ * same way `messageScope` resolves who may read it, so the set of people who
+ * receive a live update can never drift from the set allowed to read it.
+ */
+export async function threadParticipants(
+  thread: IMessageThread,
+): Promise<ThreadParticipant[]> {
+  const [teacher, student] = await Promise.all([
+    Teacher.findById(thread.teacher),
+    Student.findById(thread.student),
+  ]);
+
+  const parents = await Parent.find({
+    _id: { $in: (student?.guardians ?? []).map((g) => g.parent) },
+  });
+
+  const users = await User.find({
+    _id: {
+      $in: [
+        ...(teacher ? [teacher.user] : []),
+        ...parents.map((p) => p.user),
+      ],
+    },
+  });
+  const userMap = new Map(users.map((u) => [String(u._id), u as IUser]));
+
+  const relationshipByParent = new Map(
+    (student?.guardians ?? []).map((g) => [String(g.parent), g.relationship]),
+  );
+
+  const participants: ThreadParticipant[] = [];
+  if (teacher) {
+    participants.push({
+      id: String(teacher.user),
+      label: teacherLabel(teacher as ITeacher, userMap.get(String(teacher.user))),
+    });
+  }
+  for (const parent of parents) {
+    participants.push({
+      id: String(parent.user),
+      label: guardianLabel(
+        userMap.get(String(parent.user)),
+        relationshipByParent.get(String(parent._id)),
+      ),
+    });
+  }
+  return participants;
+}
+
+export interface ThreadParticipant {
+  /** User id. */
+  id: string;
+  label: string;
+}
+
+/** A message as it goes on the wire - everything but the per-reader `mine`. */
+export function toWireMessage(row: MessageRow): Omit<MessageRow, "mine"> {
+  return {
+    id: row.id,
+    body: row.body,
+    sender: row.sender,
+    createdAt: row.createdAt,
+  };
 }
 
 /**
@@ -412,17 +529,19 @@ export async function appendMessage(
 }
 
 /**
- * Records that this participant has now seen everything in the thread.
+ * Records that this participant has now seen everything in the thread, and
+ * reports the moment it recorded - or null if they were already up to date.
  *
- * Skipped entirely when they were already up to date. That guard is what makes
- * an 8-second poll on an idle conversation free: without it, a browser left
- * open on a quiet thread would write to Mongo all day for no change.
+ * That guard used to be what kept an 8-second poll on an idle conversation
+ * free. It earns its keep differently now: the return value is what stops a
+ * "Seen" receipt being broadcast every time somebody re-opens a thread they
+ * have already read.
  */
 export async function markThreadRead(
   thread: IMessageThread,
   userId: string,
-): Promise<void> {
-  if (lastReadAtFor(thread, userId) >= thread.lastMessageAt) return;
+): Promise<Date | null> {
+  if (lastReadAtFor(thread, userId) >= thread.lastMessageAt) return null;
 
   const now = new Date();
   const has = thread.readState.some((r) => String(r.user) === String(userId));
@@ -438,4 +557,8 @@ export async function markThreadRead(
     // and reorder the other participant's inbox.
     { timestamps: false },
   );
+
+  // The caller announces this over the socket, but only when it actually
+  // moved - an idle reader must not emit a receipt per request.
+  return now;
 }

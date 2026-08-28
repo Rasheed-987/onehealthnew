@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Menu } from "lucide-react";
 
+import { RealtimeProvider } from "./RealtimeProvider";
 import { Sidebar } from "./Sidebar";
 import { UserMenu } from "./UserMenu";
 import type { CurrentUser } from "@/lib/auth";
@@ -13,6 +14,10 @@ import type { CurrentUser } from "@/lib/auth";
  * A client component because the sidebar owns collapse/drawer state, but it
  * takes `children` as a slot - so every page inside it stays a server
  * component and can query Mongo directly.
+ *
+ * It is also where the live connection is opened. One socket per tab, held for
+ * as long as someone is anywhere in the dashboard - the sidebar's unread badge
+ * needs it on every page, not just on Messages.
  */
 export function DashboardShell({
   user,
@@ -25,6 +30,7 @@ export function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
+    <RealtimeProvider>
     <div className="flex min-h-dvh bg-background">
       <Sidebar
         role={user.role}
@@ -61,5 +67,6 @@ export function DashboardShell({
         </footer>
       </div>
     </div>
+    </RealtimeProvider>
   );
 }

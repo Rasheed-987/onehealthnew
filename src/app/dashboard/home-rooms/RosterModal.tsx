@@ -1,35 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, UserMinus, UserPlus } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Field";
+import {
+  queryKeys,
+  useAssignableStudentsQuery,
+  useClassroomRosterQuery,
+  useInvalidate,
+} from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { ClassroomRow } from "@/lib/classrooms";
-
-interface RosterStudentGuardian {
-  parentId: string;
-  name: string;
-  relationship?: string;
-}
-
-interface RosterStudent {
-  id: string;
-  fullName: string;
-  age: number;
-  gender: string;
-  isActive: boolean;
-  enrolledAt: string | null;
-  guardians?: RosterStudentGuardian[];
-}
-
-interface StudentOption {
-  id: string;
-  fullName: string;
-  age: number;
-  parentName?: string | null;
-  currentClassroomId: string | null;
-}
 
 /**
  * The "View Students" panel: who is in the room, and moving children in or out.
@@ -38,74 +21,55 @@ export function RosterModal({
   classroom,
   canAssign,
   onClose,
-  onChanged,
 }: {
   classroom: ClassroomRow;
   canAssign: boolean;
   onClose: () => void;
-  onChanged: () => void;
 }) {
-  const [students, setStudents] = useState<RosterStudent[]>([]);
-  const [usedSeats, setUsedSeats] = useState(classroom.usedSeats);
-  const [options, setOptions] = useState<StudentOption[]>([]);
   const [picked, setPicked] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const loadRoster = useCallback(async () => {
-    // No setLoading(true) here: `loading` starts true for the first fetch, and
-    // later refreshes are already covered by `busy`. Setting it synchronously
-    // would also make this a state update during the mount effect.
-    try {
-      const response = await fetch(`/api/classrooms/${classroom.id}/students`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(payload.error ?? "Could not load the roster.");
-        return;
-      }
-      setStudents(payload.students);
-      setUsedSeats(payload.classroom.usedSeats);
-      setError(null);
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setLoading(false);
-    }
-  }, [classroom.id]);
+  const invalidate = useInvalidate();
 
-  const loadOptions = useCallback(async () => {
-    if (!canAssign) return;
-    try {
-      const response = await fetch("/api/students/options");
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok) setOptions(payload.students);
-    } catch {
-      // The roster still renders without the picker; failing quietly here is
-      // better than blocking the read.
-    }
-  }, [canAssign]);
+  const roster = useClassroomRosterQuery(classroom.id);
+  // The picker fails quietly: the roster still reads without it, which is
+  // better than blocking the read on a list only the add control needs.
+  const assignable = useAssignableStudentsQuery(canAssign);
 
-  /*
-   * The first load runs inside the effect rather than by calling the two
-   * refresh helpers, which keeps every state update behind an await instead of
-   * firing synchronously while the effect body runs.
+  const students = roster.data?.students ?? [];
+  const usedSeats = roster.data?.classroom.usedSeats ?? classroom.usedSeats;
+  const options = assignable.data?.students ?? [];
+
+  // A failed write says so until the next one; a failed read says so until it
+  // succeeds. Both land in the same box, the write first because it is the
+  // thing that just happened.
+  const error =
+    actionError ??
+    (roster.isError
+      ? errorMessage(roster.error, "Could not load the roster.")
+      : null);
+
+  /**
+   * Moving a child in or out changes the roster, the seat count on the
+   * homeroom row, the child's own row, who is left to pick from, and every
+   * screen built from a room's roster - so this marks all of it stale rather
+   * than refetching two endpoints by hand and leaving the rest to drift.
    */
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      await loadRoster();
-      if (!cancelled) await loadOptions();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadRoster, loadOptions]);
+  function afterRosterChange() {
+    invalidate(
+      queryKeys.classrooms.all,
+      queryKeys.students.all,
+      queryKeys.attendance.all,
+      queryKeys.dailyProgress.all,
+      queryKeys.weeklyProgress.all,
+    );
+  }
 
   async function enrol() {
     if (!picked) return;
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       const response = await fetch(`/api/classrooms/${classroom.id}/students`, {
         method: "POST",
@@ -114,21 +78,19 @@ export function RosterModal({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(payload.error ?? "Could not add the child.");
+        setActionError(payload.error ?? "Could not add the child.");
         return;
       }
       setPicked("");
-      await loadRoster();
-      await loadOptions();
-      onChanged();
+      afterRosterChange();
     } finally {
       setBusy(false);
     }
   }
 
-  async function withdraw(student: RosterStudent) {
+  async function withdraw(student: { id: string; fullName: string }) {
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       const response = await fetch(`/api/classrooms/${classroom.id}/students`, {
         method: "DELETE",
@@ -141,12 +103,10 @@ export function RosterModal({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(payload.error ?? "Could not remove the child.");
+        setActionError(payload.error ?? "Could not remove the child.");
         return;
       }
-      await loadRoster();
-      await loadOptions();
-      onChanged();
+      afterRosterChange();
     } finally {
       setBusy(false);
     }
@@ -220,7 +180,7 @@ export function RosterModal({
           </div>
         )}
 
-        {loading ? (
+        {roster.isPending ? (
           <p className="py-6 text-center text-sm text-muted">Loading...</p>
         ) : students.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">

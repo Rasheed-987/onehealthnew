@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { StudentForm } from "./StudentForm";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  EMPTY_PAGINATION,
+  queryKeys,
+  useInvalidate,
+  useStudentsQuery,
+} from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { StudentRow } from "@/lib/students";
 import { GUARDIAN_RELATIONSHIP } from "@/models/enums";
-
-interface Pagination {
-  page: number;
-  perPage: number;
-  total: number;
-  pageCount: number;
-}
 
 const RELATIONSHIP_LABEL: Record<string, string> = {
   [GUARDIAN_RELATIONSHIP.MOTHER]: "Mother",
@@ -23,18 +24,15 @@ const RELATIONSHIP_LABEL: Record<string, string> = {
   [GUARDIAN_RELATIONSHIP.OTHER]: "Other",
 };
 
-export function StudentsClient({ canDelete }: { canDelete: boolean }) {
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1,
-    perPage: 20,
-    total: 0,
-    pageCount: 1,
-  });
+export function StudentsClient({
+  canCreate,
+  canDelete,
+}: {
+  canCreate: boolean;
+  canDelete: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -42,42 +40,35 @@ export function StudentsClient({ canDelete }: { canDelete: boolean }) {
   const [editing, setEditing] = useState<StudentRow | null>(null);
   const [deleting, setDeleting] = useState<StudentRow | null>(null);
 
-  const load = useCallback(
-    async (currentSearch: string, currentPage: number) => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const params = new URLSearchParams({ page: String(currentPage) });
-        if (currentSearch) params.set("search", currentSearch);
-        const response = await fetch(`/api/students?${params}`);
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setLoadError(payload.error ?? "Could not load students.");
-          setStudents([]);
-          return;
-        }
-        setStudents(payload.students);
-        setPagination(payload.pagination);
-      } catch {
-        setLoadError("Could not reach the server.");
-        setStudents([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
+  const invalidate = useInvalidate();
+
+  // Debounced so typing does not fire a request per keystroke. The delay is on
+  // the term rather than on the fetch, so paging is immediate and a term
+  // already in the cache comes back without a round trip.
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const { data, isPending, isError, error } = useStudentsQuery(
+    debouncedSearch,
+    page,
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => void load(search, page), 300);
-    return () => clearTimeout(timer);
-  }, [search, page, load]);
+  const students = data?.students ?? [];
+  const pagination = data?.pagination ?? EMPTY_PAGINATION;
+  const loadError = isError ? errorMessage(error, "Could not load students.") : null;
 
   function afterSave(message: string) {
     setFormOpen(false);
     setEditing(null);
     setNotice(message);
-    void load(search, page);
+    /*
+     * A child's guardians hang off this record and the form can create their
+     * accounts outright, so the parents list is stale too - and their room
+     * makes the classroom rosters stale with it.
+     */
+    invalidate(
+      queryKeys.students.all,
+      queryKeys.classrooms.all,
+      queryKeys.parents.all,
+    );
   }
 
   async function confirmDelete() {
@@ -95,7 +86,14 @@ export function StudentsClient({ canDelete }: { canDelete: boolean }) {
       setNotice(`${deleting.fullName} was removed.`);
     }
     setDeleting(null);
-    void load(search, page);
+    // Removing a child takes them off every screen built from a roster.
+    invalidate(
+      queryKeys.students.all,
+      queryKeys.classrooms.all,
+      queryKeys.attendance.all,
+      queryKeys.dailyProgress.all,
+      queryKeys.weeklyProgress.all,
+    );
   }
 
   return (
@@ -117,17 +115,19 @@ export function StudentsClient({ canDelete }: { canDelete: boolean }) {
             className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-          className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-        >
-          <Plus size={16} />
-          Add Student
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+          >
+            <Plus size={16} />
+            Add Student
+          </button>
+        )}
       </div>
 
       {warning && (
@@ -161,7 +161,7 @@ export function StudentsClient({ canDelete }: { canDelete: boolean }) {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading students...</EmptyRow>
               ) : loadError ? (
                 <EmptyRow tone="danger">{loadError}</EmptyRow>
@@ -169,7 +169,9 @@ export function StudentsClient({ canDelete }: { canDelete: boolean }) {
                 <EmptyRow>
                   {search
                     ? `No children match "${search}".`
-                    : "No children yet. Add the first one."}
+                    : canCreate
+                      ? "No children yet. Add the first one."
+                      : "No children are linked to you yet. The school adds them."}
                 </EmptyRow>
               ) : (
                 students.map((student) => (

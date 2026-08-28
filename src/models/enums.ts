@@ -53,6 +53,19 @@ export const GUARDIAN_RELATIONSHIP_LABEL: Record<GuardianRelationship, string> =
   };
 
 /**
+ * How long a guardian keeps reading a child's records after that child leaves.
+ *
+ * Not zero, because the day a family withdraws is exactly when they want to
+ * download the photos and the daily sheets from the year they paid for, and
+ * cutting them off at the moment the enrolment closes turns that into a support
+ * request. Not unbounded either - see `guardedStudentIds`, where a missing
+ * enrolment condition previously meant access never ended at all.
+ */
+export const GUARDIAN_ACCESS_GRACE_DAYS = 30;
+export const GUARDIAN_ACCESS_GRACE_MS =
+  GUARDIAN_ACCESS_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
  * A classroom has exactly one LEAD (the "Class Teacher" column in the UI) and
  * any number of ASSISTANTs (the "Additional Teachers" column).
  */

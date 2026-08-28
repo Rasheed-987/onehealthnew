@@ -1,26 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Search, Trash2 } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { SelectField, TextField } from "@/components/ui/Field";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useParentOptionsQuery } from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import { GENDER, GUARDIAN_RELATIONSHIP } from "@/models/enums";
 import type { StudentRow } from "@/lib/students";
 
 type FieldErrors = Record<string, string>;
 
-interface ParentOption {
-  id: string;
-  name: string;
-  email: string;
-}
+/**
+ * One row of the guardian editor.
+ *
+ * Two kinds, because a family enrolling for the first time has no accounts to
+ * pick from: `existing` is someone found in the search, `new` is someone typed
+ * straight onto this form, whose account the API creates alongside the child.
+ */
+type GuardianDraft =
+  | {
+      kind: "existing";
+      parent: string;
+      /** Cached for display - the search results are not kept around. */
+      label: string;
+      relationship: string;
+    }
+  | {
+      kind: "new";
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      relationship: string;
+    };
 
-/** One row of the guardian editor. */
-interface GuardianDraft {
-  parent: string;
-  relationship: string;
-}
+const CONTROL_CLASS =
+  "mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25";
 
 const GENDER_OPTIONS = [
   { value: GENDER.MALE, label: "Male" },
@@ -51,8 +69,7 @@ export function StudentForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
-  const [parentOptions, setParentOptions] = useState<ParentOption[]>([]);
-  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   /*
    * Seeded from props once, on mount. The caller renders this component only
    * while the dialog is open and gives it a `key` per student, so every open
@@ -62,32 +79,30 @@ export function StudentForm({
   const [guardians, setGuardians] = useState<GuardianDraft[]>(() =>
     student
       ? student.guardians.map((g) => ({
+          kind: "existing" as const,
           parent: g.parentId,
+          label: `${g.name} (${g.email})`,
           relationship: g.relationship,
         }))
       : [],
   );
+  /*
+   * Debounced, because this fires on every keystroke and the endpoint runs a
+   * regex over the user collection. An empty box still queries: the API answers
+   * it with the most recently added guardians, which is very often the one
+   * wanted when enrolling a sibling.
+   *
+   * Backspacing through a term now costs nothing - every prefix on the way
+   * back is a term already asked for, so it comes from the cache - and the
+   * results already listed stay put while a new term is fetched.
+   */
+  const debouncedSearch = useDebouncedValue(search, 250);
+  const guardianSearch = useParentOptionsQuery(debouncedSearch);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/parents/options");
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!response.ok) {
-          setOptionsError(payload.error ?? "Could not load the parent list.");
-          return;
-        }
-        setParentOptions(payload.parents);
-      } catch {
-        if (!cancelled) setOptionsError("Could not load the parent list.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const results = guardianSearch.data?.parents ?? [];
+  const optionsError = guardianSearch.isError
+    ? errorMessage(guardianSearch.error, "Could not search guardians.")
+    : null;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,9 +120,11 @@ export function StudentForm({
       gender: text("gender"),
       nationality: text("nationality"),
       medicalNotes: text("medicalNotes"),
-      // Rows where no parent was chosen yet are dropped rather than sent as
-      // empty strings the API would have to reject.
-      guardians: guardians.filter((g) => g.parent),
+      // Half-typed new-guardian rows are dropped rather than sent as empty
+      // strings the API would have to reject.
+      guardians: guardians.filter(
+        (g) => g.kind === "existing" || (g.firstName && g.lastName && g.email),
+      ),
     };
     if (isEdit) body.isActive = data.get("isActive") === "on";
 
@@ -138,12 +155,18 @@ export function StudentForm({
     }
   }
 
-  /** Parents not already on this child, so the same one cannot be picked twice. */
-  function availableFor(index: number): ParentOption[] {
-    const taken = new Set(
-      guardians.filter((_, i) => i !== index).map((g) => g.parent),
+  /** Search hits not already on this child, so the same one cannot be added twice. */
+  const linked = new Set(
+    guardians.flatMap((g) => (g.kind === "existing" ? [g.parent] : [])),
+  );
+  const addable = results.filter((option) => !linked.has(option.id));
+
+  function update(index: number, patch: Partial<GuardianDraft>) {
+    setGuardians((rows) =>
+      rows.map((row, i) =>
+        i === index ? ({ ...row, ...patch } as GuardianDraft) : row,
+      ),
     );
-    return parentOptions.filter((option) => !taken.has(option.id));
   }
 
   return (
@@ -225,115 +248,188 @@ export function StudentForm({
               Guardians
             </legend>
 
-            {optionsError ? (
-              <p className="text-sm text-danger">{optionsError}</p>
-            ) : parentOptions.length === 0 ? (
-              <p className="text-sm text-muted">
-                No parents exist yet. Add one on the Parents screen first, then
-                come back and link them here.
+            {fieldErrors.guardians && (
+              <p className="mb-2 text-sm text-danger">
+                {fieldErrors.guardians}
               </p>
-            ) : (
-              <>
-                {fieldErrors.guardians && (
-                  <p className="mb-2 text-sm text-danger">
-                    {fieldErrors.guardians}
-                  </p>
-                )}
+            )}
 
-                {guardians.length === 0 && (
-                  <p className="mb-3 text-sm text-muted">
-                    No guardian linked yet. A child with no guardian will not
-                    appear on any parent&rsquo;s dashboard.
-                  </p>
-                )}
+            {guardians.length === 0 && (
+              <p className="mb-3 text-sm text-muted">
+                Every child needs at least one guardian &mdash; search for them
+                below, or add someone new.
+              </p>
+            )}
 
-                <div className="flex flex-col gap-2">
-                  {guardians.map((guardian, index) => (
-                    <div key={index} className="flex flex-wrap items-end gap-2">
-                      <div className="min-w-48 flex-1">
-                        <label className="text-xs text-muted">Parent</label>
-                        <select
-                          value={guardian.parent}
-                          onChange={(event) =>
-                            setGuardians((rows) =>
-                              rows.map((row, i) =>
-                                i === index
-                                  ? { ...row, parent: event.target.value }
-                                  : row,
-                              ),
-                            )
-                          }
-                          className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-                        >
-                          <option value="">Choose a parent...</option>
-                          {availableFor(index).map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name} ({option.email})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+            <div className="flex flex-col gap-2">
+              {guardians.map((guardian, index) => (
+                <div
+                  key={index}
+                  className="flex flex-wrap items-end gap-2 rounded-control bg-surface-hover/40 p-2"
+                >
+                  {guardian.kind === "existing" ? (
+                    <p className="min-w-48 flex-1 py-2 text-sm text-foreground">
+                      {guardian.label}
+                    </p>
+                  ) : (
+                    <div className="flex min-w-48 flex-1 flex-wrap gap-2">
+                      <input
+                        value={guardian.firstName}
+                        onChange={(e) =>
+                          update(index, { firstName: e.target.value })
+                        }
+                        placeholder="First name"
+                        aria-label="Guardian first name"
+                        className={`${CONTROL_CLASS} min-w-28 flex-1`}
+                      />
+                      <input
+                        value={guardian.lastName}
+                        onChange={(e) =>
+                          update(index, { lastName: e.target.value })
+                        }
+                        placeholder="Last name"
+                        aria-label="Guardian last name"
+                        className={`${CONTROL_CLASS} min-w-28 flex-1`}
+                      />
+                      <input
+                        type="email"
+                        value={guardian.email}
+                        onChange={(e) =>
+                          update(index, { email: e.target.value })
+                        }
+                        placeholder="Email (their invitation goes here)"
+                        aria-label="Guardian email"
+                        className={`${CONTROL_CLASS} min-w-52 flex-1`}
+                      />
+                      <input
+                        value={guardian.phone}
+                        onChange={(e) =>
+                          update(index, { phone: e.target.value })
+                        }
+                        placeholder="Phone (optional)"
+                        aria-label="Guardian phone"
+                        className={`${CONTROL_CLASS} min-w-36 flex-1`}
+                      />
+                    </div>
+                  )}
 
-                      <div className="w-40">
-                        <label className="text-xs text-muted">
-                          Relationship
-                        </label>
-                        <select
-                          value={guardian.relationship}
-                          onChange={(event) =>
-                            setGuardians((rows) =>
-                              rows.map((row, i) =>
-                                i === index
-                                  ? { ...row, relationship: event.target.value }
-                                  : row,
-                              ),
-                            )
-                          }
-                          className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-                        >
-                          {RELATIONSHIP_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="w-40">
+                    <label className="text-xs text-muted">Relationship</label>
+                    <select
+                      value={guardian.relationship}
+                      onChange={(e) =>
+                        update(index, { relationship: e.target.value })
+                      }
+                      className={CONTROL_CLASS}
+                    >
+                      {RELATIONSHIP_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGuardians((rows) => rows.filter((_, i) => i !== index))
+                    }
+                    aria-label="Remove this guardian"
+                    className="rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3">
+              <label className="text-xs text-muted" htmlFor="guardian-search">
+                Search existing guardians
+              </label>
+              <div className="relative mt-1">
+                <Search
+                  size={14}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
+                />
+                <input
+                  id="guardian-search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Name, email or phone"
+                  className="w-full rounded-control border border-border bg-surface py-2 pl-8 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+                />
+              </div>
+
+              {optionsError ? (
+                <p className="mt-2 text-sm text-danger">{optionsError}</p>
+              ) : addable.length === 0 ? (
+                <p className="mt-2 text-sm text-muted">
+                  No guardian matches that. Add them as someone new below.
+                </p>
+              ) : (
+                <ul className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
+                  {addable.map((option) => (
+                    <li key={option.id}>
                       <button
                         type="button"
-                        onClick={() =>
-                          setGuardians((rows) =>
-                            rows.filter((_, i) => i !== index),
-                          )
-                        }
-                        aria-label="Remove this guardian"
-                        className="rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle"
+                        onClick={() => {
+                          setGuardians((rows) => [
+                            ...rows,
+                            {
+                              kind: "existing",
+                              parent: option.id,
+                              label: `${option.name} (${option.email})`,
+                              relationship: GUARDIAN_RELATIONSHIP.GUARDIAN,
+                            },
+                          ]);
+                          setSearch("");
+                        }}
+                        className="w-full rounded-control px-3 py-2 text-left transition-colors hover:bg-surface-hover"
                       >
-                        <Trash2 size={16} />
+                        <span className="block text-sm text-foreground">
+                          {option.name}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {option.email}
+                          {option.phone ? ` · ${option.phone}` : ""}
+                          {/* The children are what tell two same-named guardians apart. */}
+                          {option.children.length > 0
+                            ? ` · ${option.children.map((c) => c.name).join(", ")}`
+                            : " · no children linked yet"}
+                        </span>
                       </button>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
+              )}
+            </div>
 
-                <button
-                  type="button"
-                  disabled={guardians.length >= parentOptions.length}
-                  onClick={() =>
-                    setGuardians((rows) => [
-                      ...rows,
-                      {
-                        parent: "",
-                        relationship: GUARDIAN_RELATIONSHIP.GUARDIAN,
-                      },
-                    ])
-                  }
-                  className="mt-3 flex items-center gap-1.5 rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Plus size={14} />
-                  Add guardian
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() =>
+                setGuardians((rows) => [
+                  ...rows,
+                  {
+                    kind: "new",
+                    firstName: "",
+                    lastName: "",
+                    email: "",
+                    phone: "",
+                    relationship: GUARDIAN_RELATIONSHIP.GUARDIAN,
+                  },
+                ])
+              }
+              className="mt-3 flex items-center gap-1.5 rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover"
+            >
+              <Plus size={14} />
+              Add someone new
+            </button>
+            <p className="mt-2 text-xs text-muted">
+              A new guardian gets an account and an emailed invitation when you
+              save.
+            </p>
           </fieldset>
 
           {isEdit && (

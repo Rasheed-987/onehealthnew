@@ -128,9 +128,9 @@ StudentSchema.virtual("age").get(function (this: IStudent) {
 });
 
 /**
- * MongoDB cannot enforce uniqueness *within* an array, so the two guardian
- * invariants are checked here. Mongoose 9 pre-hooks are async and take no
- * `next` callback.
+ * The two guardian invariants, neither of which an index can express: MongoDB
+ * cannot enforce uniqueness *within* an array, and it cannot require an array
+ * to be non-empty. Mongoose 9 pre-hooks are async and take no `next` callback.
  */
 StudentSchema.pre("validate", async function () {
   const guardianIds = this.guardians.map((g) => String(g.parent));
@@ -142,7 +142,18 @@ StudentSchema.pre("validate", async function () {
     );
   }
 
-
+  /*
+   * A child with no guardian is unreachable: nobody can be told about them,
+   * and nobody can read their sheets. Only enforced when the list is actually
+   * being written, so a legacy row that predates this rule stays repairable -
+   * rejecting every save of it would leave the only fix as a manual DB edit.
+   */
+  if (
+    (this.isNew || this.isModified("guardians")) &&
+    this.guardians.length === 0
+  ) {
+    this.invalidate("guardians", "A student needs at least one guardian.");
+  }
 });
 
 /**

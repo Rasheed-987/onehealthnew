@@ -1,7 +1,25 @@
 import { cookies, headers } from "next/headers";
-import { SignJWT, jwtVerify } from "jose";
 
-import { USER_ROLE, type UserRole } from "@/models/enums";
+import {
+  SESSION_COOKIE,
+  signSessionToken,
+  verifySessionToken,
+  type SessionPayload,
+} from "@/lib/sessionToken";
+
+/*
+ * Signing and verifying moved to `sessionToken.ts` so the WebSocket handshake -
+ * which runs in the custom server, outside any Next request - can verify a
+ * cookie without importing `next/headers`. Re-exported here so every existing
+ * importer of this module is unaffected.
+ */
+export {
+  SESSION_COOKIE,
+  signSessionToken,
+  verifySessionToken,
+  sessionCookieFromHeader,
+  type SessionPayload,
+} from "@/lib/sessionToken";
 
 /**
  * Sessions, as a signed JWT in an httpOnly cookie.
@@ -16,69 +34,9 @@ import { USER_ROLE, type UserRole } from "@/models/enums";
  * can read the payload.
  */
 
-export const SESSION_COOKIE = "lan_session";
-
 /** "Remember me" ticked, versus a session that should expire the same day. */
 export const REMEMBER_ME_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 export const DEFAULT_MAX_AGE = 60 * 60 * 8; // 8 hours - one school day
-
-export interface SessionPayload {
-  userId: string;
-  role: UserRole;
-}
-
-function getSecret(): Uint8Array {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error(
-      "AUTH_SECRET is missing or shorter than 32 characters. Generate one with:\n" +
-        "  node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
-    );
-  }
-  return new TextEncoder().encode(secret);
-}
-
-export async function signSessionToken(
-  payload: SessionPayload,
-  maxAgeSeconds: number,
-): Promise<string> {
-  return new SignJWT({ role: payload.role })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(payload.userId)
-    .setIssuedAt()
-    .setExpirationTime(`${maxAgeSeconds}s`)
-    .sign(getSecret());
-}
-
-/**
- * Returns null rather than throwing on anything wrong with the token - expired,
- * tampered with, signed by an old secret. Callers treat "no session" and "bad
- * session" identically, and a malformed cookie must never 500 the app.
- */
-export async function verifySessionToken(
-  token: string | undefined,
-): Promise<SessionPayload | null> {
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret(), {
-      algorithms: ["HS256"],
-    });
-    const userId = payload.sub;
-    const role = payload.role;
-    if (typeof userId !== "string") return null;
-    if (!isUserRole(role)) return null;
-    return { userId, role };
-  } catch {
-    return null;
-  }
-}
-
-function isUserRole(value: unknown): value is UserRole {
-  return (
-    typeof value === "string" &&
-    (Object.values(USER_ROLE) as string[]).includes(value)
-  );
-}
 
 /**
  * The same token, presented the way a native app can actually present it.

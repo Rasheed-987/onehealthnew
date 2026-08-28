@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarDays, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
-import type { AttendanceRow, AttendanceSummary } from "@/lib/attendance";
-import type { ClassroomRow } from "@/lib/classrooms";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useDismissibleError } from "@/hooks/useDismissibleError";
+import { useAttendanceQuery, useClassroomPickerQuery } from "@/hooks/queries";
 
 /**
  * The register, read back.
@@ -35,77 +36,30 @@ const STATUS_TONE = {
   EXCUSED: "neutral",
 } as const;
 
-interface ScopeInfo {
-  role: string;
-  /** null means unrestricted - the super admin. */
-  classroomIds: string[] | null;
-}
-
 export function AttendanceClient() {
   const [date, setDate] = useState(todayKey());
   const [classroom, setClassroom] = useState("");
   const [status, setStatus] = useState("");
 
-  const [classrooms, setClassrooms] = useState<ClassroomRow[]>([]);
-  const [records, setRecords] = useState<AttendanceRow[]>([]);
-  const [summary, setSummary] = useState<AttendanceSummary | null>(null);
-  const [scope, setScope] = useState<ScopeInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
   // The picker offers whatever the scoped classroom route returns: every room
-  // for an admin, the caller's own rooms for a teacher. Nothing to filter here.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/classrooms?perPage=100");
-        const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok) setClassrooms(payload.classrooms ?? []);
-      } catch {
-        // A failed picker is not a failed page - the register still loads.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // for an admin, the caller's own rooms for a teacher. Nothing to filter here,
+  // and nothing to fetch either if another screen has already asked for it.
+  const classrooms = useClassroomPickerQuery().data?.classrooms ?? [];
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const params = new URLSearchParams({ date });
-      if (classroom) params.set("classroom", classroom);
-      if (status) params.set("status", status);
+  // Only the date is debounced. It is the one control a person can sweep
+  // through - the two dropdowns change once per click, and a filter they have
+  // already used comes back from the cache without a request at all.
+  const debouncedDate = useDebouncedValue(date, 200);
+  const register = useAttendanceQuery(debouncedDate, classroom, status);
+  const { data, isPending } = register;
 
-      const response = await fetch(`/api/attendance?${params}`);
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setLoadError(payload.error ?? "Could not load the register.");
-        setRecords([]);
-        setSummary(null);
-        return;
-      }
-      setRecords(payload.records ?? []);
-      setSummary(payload.summary ?? null);
-      setScope(payload.scope ?? null);
-    } catch {
-      setLoadError("Could not reach the server.");
-      setRecords([]);
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [date, classroom, status]);
-
-  // Deferred rather than called straight from the effect body: a synchronous
-  // setState there cascades a second render, and the small delay coalesces the
-  // burst of changes you get from clicking through a date picker.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 200);
-    return () => clearTimeout(timer);
-  }, [load]);
+  const records = data?.records ?? [];
+  const summary = data?.summary ?? null;
+  const scope = data?.scope ?? null;
+  const [loadError, dismissError] = useDismissibleError(
+    register,
+    "Could not load the register.",
+  );
 
   /*
    * A teacher posted to no rooms gets an empty scope, which is correct and
@@ -189,7 +143,7 @@ export function AttendanceClient() {
           <span>{loadError}</span>
           <button
             type="button"
-            onClick={() => setLoadError(null)}
+            onClick={dismissError}
             aria-label="Dismiss"
           >
             <X size={16} />
@@ -236,7 +190,7 @@ export function AttendanceClient() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {isPending ? (
                 <EmptyRow>Loading the register...</EmptyRow>
               ) : records.length === 0 ? (
                 <EmptyRow>{emptyMessage}</EmptyRow>

@@ -49,7 +49,7 @@ export function Sidebar({
       ),
     [sections],
   );
-  const unread = useUnreadCount(60_000, wantsUnread);
+  const unread = useUnreadCount(wantsUnread);
 
   return (
     <>

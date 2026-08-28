@@ -26,6 +26,15 @@ export interface IUser {
    */
   mustChangePassword: boolean;
   lastLoginAt?: Date;
+  /**
+   * Rate-limiting state for emailed sign-in codes - see `claimCodeRequest`.
+   *
+   * Kept here rather than on VerificationToken because that collection holds at
+   * most one live token per user per type: issuing a code deletes the previous
+   * one, so it has no memory of how many have been asked for.
+   */
+  codeRequestCount?: number;
+  codeRequestWindowAt?: Date | null;
   /** Who created this account. Null for the bootstrapped super admin. */
   createdBy?: Types.ObjectId | null;
   createdAt: Date;
@@ -68,6 +77,8 @@ const UserSchema = new Schema<IUser>(
     },
     mustChangePassword: { type: Boolean, default: false },
     lastLoginAt: { type: Date },
+    codeRequestCount: { type: Number, default: 0 },
+    codeRequestWindowAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   {

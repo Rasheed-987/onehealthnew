@@ -1,14 +1,20 @@
+import mongoose from "mongoose";
 import type { NextRequest } from "next/server";
 
 import { ApiError, handle, ok, parseBody, requirePermission } from "@/lib/api";
+import { adminDisplayName, sendInviteAfterCreate } from "@/lib/accountAccess";
+import {
+  resolveGuardians,
+  type CreatedGuardianAccount,
+} from "@/lib/guardians";
 import { UpdateStudentSchema, toStudentRow } from "@/lib/students";
 import {
-  assertGuardianListAllowed,
+  assertGuardianEditAllowed,
   findStudentInScope,
 } from "@/lib/studentScope";
 import { isObjectId } from "@/lib/teachers";
 import { Classroom, Enrollment, Parent, Student, User } from "@/models";
-import { ENROLLMENT_STATUS } from "@/models/enums";
+import { ENROLLMENT_STATUS, USER_ROLE, USER_STATUS } from "@/models/enums";
 
 async function rowFor(student: InstanceType<typeof Student>) {
   const [parents, enrollments] = await Promise.all([
@@ -57,10 +63,12 @@ export async function PATCH(
     const student = await findStudentInScope(session, id);
     const input = await parseBody(request, UpdateStudentSchema);
 
-    if (input.guardians) {
-      // Stops a guardian from editing themselves off their own child, which
-      // would leave a record they can no longer see or correct.
-      await assertGuardianListAllowed(session, input.guardians);
+    if (input.guardians !== undefined) {
+      // Staff-only to CHANGE: a guardian submitting this form would otherwise
+      // remove the co-guardian the school added, or themselves. Resubmitting
+      // the same list unchanged is fine, which is what a parent editing their
+      // own child's details does.
+      assertGuardianEditAllowed(session, student.guardians, input.guardians);
     }
 
     if (input.firstName !== undefined) student.firstName = input.firstName;
@@ -77,20 +85,63 @@ export async function PATCH(
     if (input.medicalNotes !== undefined) {
       student.medicalNotes = input.medicalNotes || undefined;
     }
+    /*
+     * Guardians are sent whole - the form always submits the complete list, so
+     * a removed guardian is simply absent rather than needing its own
+     * operation - and a row may name someone who has no account yet. That is
+     * the second-parent case: a father asking for access months after the
+     * child enrolled is added here, on the child, not on a separate screen.
+     *
+     * save() rather than updateOne() throughout, so the pre('validate') hook
+     * that forbids a duplicate or empty guardian list actually runs.
+     */
+    let created: CreatedGuardianAccount[] = [];
     if (input.guardians !== undefined) {
-      // Sent whole: the form always submits the complete list, so a removed
-      // guardian is simply absent rather than needing its own operation.
-      student.guardians = input.guardians.map((g) => ({
-        parent: g.parent as unknown as (typeof student.guardians)[number]["parent"],
-        relationship: g.relationship,
-      }));
+      const guardians = input.guardians;
+      const dbSession = await mongoose.startSession();
+      try {
+        await dbSession.withTransaction(async () => {
+          const resolved = await resolveGuardians(
+            guardians,
+            session.userId,
+            dbSession,
+          );
+          student.guardians = resolved.links.map((link) => ({
+            parent: link.parent as unknown as (typeof student.guardians)[number]["parent"],
+            relationship: link.relationship,
+          }));
+          await student.save({ session: dbSession });
+          created = resolved.created;
+        });
+      } finally {
+        await dbSession.endSession();
+      }
+    } else {
+      await student.save();
     }
 
-    // save() rather than updateOne(), so the pre('validate') hook that forbids
-    // the same parent twice actually runs.
-    await student.save();
+    // After the commit, for the same reason as on creation: an email cannot be
+    // rolled back.
+    const invitedBy =
+      created.length > 0 ? await adminDisplayName(session.userId) : "";
+    const invitations = await Promise.all(
+      created.map(async (account) => ({
+        parentId: account.parentId,
+        email: account.email,
+        ...(await sendInviteAfterCreate(
+          {
+            _id: account.userId,
+            email: account.email,
+            firstName: account.firstName,
+            status: USER_STATUS.INVITED,
+            role: USER_ROLE.PARENT,
+          },
+          invitedBy,
+        )),
+      })),
+    );
 
-    return ok({ student: await rowFor(student) });
+    return ok({ student: await rowFor(student), invitations });
   });
 }
 

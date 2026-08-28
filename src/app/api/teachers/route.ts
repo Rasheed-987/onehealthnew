@@ -175,6 +175,7 @@ export async function POST(request: Request) {
         email: input.email,
         firstName: input.firstName,
         status: USER_STATUS.INVITED,
+        role: USER_ROLE.TEACHER,
       },
       await adminDisplayName(session.userId),
     );

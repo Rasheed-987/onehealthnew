@@ -1,51 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-import { usePoll } from "./usePoll";
-
-/** Fired by the messages screen when it opens a thread and clears its unread. */
-export const MESSAGES_READ_EVENT = "messages:read";
+import { useUnreadCountQuery } from "@/hooks/queries";
+import { useRealtime } from "./RealtimeProvider";
 
 /**
  * Unread message count for the sidebar badge.
  *
- * Polled slowly - a badge is a nudge, not a notification, and every page in the
- * dashboard runs this. Reading a thread is the one thing that should move it
- * faster than the interval, so the messages screen fires a window event and
- * this refetches on the spot instead of leaving a stale number sitting in the
- * corner of the page the reader is already looking at.
+ * Pushed to over the socket, which is what a badge wants: it moves when a
+ * message actually arrives rather than up to a minute later. With no socket it
+ * falls back to the slow poll it always had. Reading a thread moves it either
+ * way - the messages screen invalidates this query - so a number the reader has
+ * just disproved never sits in the corner of the page they are looking at.
  *
- * Failures are swallowed: a badge that cannot load is not a page that failed.
+ * That used to be a window event, dispatched by one component and listened for
+ * by this one. It is the same cache entry on both sides now, which is the same
+ * decoupling without a second mechanism to keep in step.
+ *
+ * Failures are swallowed: a badge that cannot load is not a page that failed,
+ * and the last known number is better than a zero nobody can trust.
  */
-export function useUnreadCount(pollMs = 60_000, enabled = true): number {
-  const [count, setCount] = useState(0);
-
-  const load = useCallback(async () => {
-    if (!enabled) return;
-    try {
-      const response = await fetch("/api/messages/unread-count");
-      if (!response.ok) return;
-      const payload = await response.json().catch(() => ({}));
-      if (typeof payload.count === "number") setCount(payload.count);
-    } catch {
-      // Offline, or signed out. Leave the last known number alone.
-    }
-  }, [enabled]);
-
-  // Deferred so the effect body does not setState synchronously.
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 0);
-    return () => clearTimeout(timer);
-  }, [load]);
-
-  useEffect(() => {
-    const onRead = () => void load();
-    window.addEventListener(MESSAGES_READ_EVENT, onRead);
-    return () => window.removeEventListener(MESSAGES_READ_EVENT, onRead);
-  }, [load]);
-
-  usePoll(load, pollMs, enabled);
-
-  return count;
+export function useUnreadCount(enabled = true): number {
+  const { connected } = useRealtime();
+  return useUnreadCountQuery(enabled, connected).data?.count ?? 0;
 }

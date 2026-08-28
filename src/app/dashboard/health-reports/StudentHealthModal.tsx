@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AlertTriangle, HeartPulse } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
+import { useStudentVisitsQuery } from "@/hooks/queries";
+import { errorMessage } from "@/lib/fetchJson";
 import type { ClinicalVisitRow } from "@/lib/clinicalVisits";
 import { formatVisitedAt } from "./formatVisitedAt";
 
@@ -24,34 +25,15 @@ export function StudentHealthModal({
   student: ClinicalVisitRow["student"];
   onClose: () => void;
 }) {
-  const [visits, setVisits] = useState<ClinicalVisitRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isPending, isError, error: loadError } = useStudentVisitsQuery(
+    student.id,
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch(
-          `/api/clinical-visits?student=${student.id}`,
-        );
-        const payload = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!response.ok) {
-          setError(payload.error ?? "Could not load this health record.");
-        } else {
-          setVisits(payload.visits ?? []);
-        }
-      } catch {
-        if (!cancelled) setError("Could not reach the server.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [student.id]);
+  const visits = data?.visits ?? [];
+  const loading = isPending;
+  const error = isError
+    ? errorMessage(loadError, "Could not load this health record.")
+    : null;
 
   const initials = student.fullName
     .split(" ")

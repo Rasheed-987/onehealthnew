@@ -5,7 +5,7 @@ import { fail, handle, ok, parseBody } from "@/lib/api";
 import { verifyPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { User } from "@/models";
-import { USER_STATUS } from "@/models/enums";
+import { USER_ROLE, USER_STATUS } from "@/models/enums";
 
 const LoginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address."),
@@ -36,14 +36,17 @@ export async function POST(request: Request) {
       return fail(403, "This account has been suspended.");
     }
     /*
-     * Nothing in the app creates INVITED accounts any more, but the schema
-     * still defaults to it, so a hand-inserted document can land here. The
-     * message no longer promises an invitation email that nobody sends.
+     * An account an administrator created but nobody has set up yet. There is
+     * no single instruction to give, because the two roles activate by
+     * different doors - a guardian asks for a code in the app, staff redeem the
+     * link that was emailed to them - so each is pointed at their own.
      */
     if (user.status === USER_STATUS.INVITED) {
       return fail(
         403,
-        "This account is not active yet. Ask an administrator to activate it.",
+        user.role === USER_ROLE.PARENT
+          ? 'Your account is not set up yet. Open the app and choose "Sign in with code".'
+          : "Your account is not set up yet. Use the invitation link that was emailed to you, or ask an administrator to resend it.",
       );
     }
 
