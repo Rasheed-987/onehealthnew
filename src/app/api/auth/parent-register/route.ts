@@ -156,14 +156,20 @@ export async function POST(request: Request) {
 
     if (existing?.status === USER_STATUS.ACTIVE) {
       /*
-       * Not an error, and not a new account. This is the sibling case: they are
-       * already set up and want a second child. Adding it is a job for the
-       * signed-in route, so they are pointed at sign-in rather than being told
-       * to invent a second email address.
+       * The sibling case: already set up, and registering again because that is
+       * the screen they remember. Not a new account, and not really an error.
+       *
+       * Deliberately points at the school rather than at an in-app screen. The
+       * signed-in route below can file this request, but the app has no screen
+       * that calls it yet, and naming a button that does not exist is worse
+       * than naming none. Staff adding the guardian to the second child on the
+       * enrolment sheet is the path that is certain to work today, and it is a
+       * routine job rather than an escalation - so the wording says "the
+       * school", not "support".
        */
       throw new ApiError(
         409,
-        "You already have an account. Sign in, then add your child from inside the app.",
+        "You already have an account with this email. Ask the school to add your other child to it -",
         { email: "This email address is already registered." },
       );
     }

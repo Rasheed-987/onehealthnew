@@ -107,6 +107,29 @@ export const PERMISSIONS = {
   "guardianLink:decide": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
   /** Filing one. Guardians only - staff link a family directly instead. */
   "guardianLink:create": [USER_ROLE.PARENT],
+
+  /*
+   * School announcements.
+   *
+   * The write side is the super admin alone - not STAFF - and that is the
+   * whole shape of the feature. A notice carries the school's voice, reaches
+   * whole roles and whole rooms at once, and lands with no thread to reply
+   * into; a teacher who needs to reach one family has `message:send`, which is
+   * addressed, answerable and scoped to a child they teach.
+   *
+   * `notification:list` is everyone, because the point of a notice is being
+   * read. The row-level half is `resolveNotificationScope`, which is what
+   * decides that a teacher does not see the notice pinned to a room they are
+   * not posted to.
+   */
+  "notification:create": [USER_ROLE.SUPER_ADMIN],
+  "notification:update": [USER_ROLE.SUPER_ADMIN],
+  "notification:delete": [USER_ROLE.SUPER_ADMIN],
+  "notification:list": [
+    USER_ROLE.SUPER_ADMIN,
+    USER_ROLE.TEACHER,
+    USER_ROLE.PARENT,
+  ],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

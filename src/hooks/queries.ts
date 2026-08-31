@@ -14,6 +14,7 @@ import type { ClinicalVisitRow, VisitSummary } from "@/lib/clinicalVisits";
 import type { DailyProgressRow, ProgressSummary } from "@/lib/dailyProgress";
 import type { FeedbackRow, FeedbackSummary } from "@/lib/feedback";
 import type { GalleryItemRow } from "@/lib/gallery";
+import type { AudienceOptions, NotificationRow } from "@/lib/notifications";
 import type {
   MessageRecipientRow,
   MessageRow,
@@ -121,6 +122,20 @@ export const queryKeys = {
         query.page,
         query.perPage,
       ] as const,
+  },
+  notifications: {
+    all: ["notifications"] as const,
+    list: (query: NotificationQuery) =>
+      [
+        "notifications",
+        "list",
+        query.kind,
+        query.search,
+        query.includeInactive,
+        query.page,
+        query.perPage,
+      ] as const,
+    audience: ["notifications", "audience"] as const,
   },
   messages: {
     all: ["messages"] as const,
@@ -564,6 +579,61 @@ export function useFeedbackQuery(query: FeedbackQuery) {
         })}`,
       ),
     ...KEEP_ROWS,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Notifications                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Everything the notification table can vary, in one object - see FeedbackQuery. */
+export interface NotificationQuery {
+  /** One audience kind, or "" for all of them. */
+  kind: string;
+  search: string;
+  /** Author-only. The API ignores it for every other role. */
+  includeInactive: boolean;
+  page: number;
+  perPage: number;
+}
+
+/**
+ * The notice board. Scoped server-side: every notice for the super admin who
+ * wrote them, and for everybody else only the ones whose audience reaches them.
+ */
+export function useNotificationsQuery(query: NotificationQuery) {
+  return useQuery({
+    queryKey: queryKeys.notifications.list(query),
+    queryFn: () =>
+      fetchJson<{
+        notifications: NotificationRow[];
+        pagination: Pagination;
+      }>(
+        `/api/notifications?${filterParams({
+          kind: query.kind,
+          search: query.search,
+          includeInactive: query.includeInactive ? "true" : "",
+          page: String(query.page),
+          perPage: String(query.perPage),
+        })}`,
+      ),
+    ...KEEP_ROWS,
+  });
+}
+
+/**
+ * The audience picker, already grouped by kind.
+ *
+ * Held for a while because it is the roll of the school: rooms, children and
+ * who their guardians are change on the timescale of an enrolment, not of a
+ * modal being opened and closed while somebody drafts a notice.
+ */
+export function useAudienceOptionsQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.notifications.audience,
+    queryFn: () => fetchJson<AudienceOptions>("/api/notifications/audience"),
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 

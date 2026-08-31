@@ -397,3 +397,78 @@ export const FEEDBACK_MAX_STARS = 5;
  * textarea, and a client component cannot value-import a Mongoose module.
  */
 export const FEEDBACK_MAX_LENGTH = 2000;
+
+/**
+ * Who a notification is addressed to.
+ *
+ * The screen the admin fills in is a single "For" box, but the thing behind it
+ * is not one flat list of names - and that was the bug in the first cut, where
+ * "All", "Parent", "Teacher" and every individual teacher sat in one
+ * multi-select. Those are four different KINDS of target with four different
+ * meanings, and mixing them means "All + Ms. Amal" is expressible and nobody
+ * can say what it should do.
+ *
+ * So a notice carries exactly one kind, and the kind decides which list on the
+ * audience is populated:
+ *
+ *   ALL        everybody the school can reach - staff and families
+ *   ROLE       an entire role: all parents, or all teachers
+ *   CLASSROOM  one or more rooms: the staff posted to them, and the families
+ *              of the children currently seated in them
+ *   STUDENT    named children - which means the guardians of those children
+ *
+ * Deliberately a rule rather than a resolved list of user ids. A notice board
+ * has a LIVE audience: a family who joins Nursery 2 on Monday should see the
+ * closure notice pinned to Nursery 2, and a list of recipients frozen at the
+ * moment Send was pressed would silently leave them out. See
+ * `resolveNotificationScope`, which turns the rule back into a filter on read.
+ */
+export const NOTIFICATION_AUDIENCE = {
+  ALL: "ALL",
+  ROLE: "ROLE",
+  CLASSROOM: "CLASSROOM",
+  STUDENT: "STUDENT",
+} as const;
+export type NotificationAudienceKind =
+  (typeof NOTIFICATION_AUDIENCE)[keyof typeof NOTIFICATION_AUDIENCE];
+
+/** The four headings the audience picker groups its options under. */
+export const NOTIFICATION_AUDIENCE_LABEL: Record<
+  NotificationAudienceKind,
+  string
+> = {
+  ALL: "Everyone",
+  ROLE: "A whole role",
+  CLASSROOM: "Classrooms",
+  STUDENT: "Specific children",
+};
+
+/**
+ * The roles a notice may be addressed to.
+ *
+ * Not every `USER_ROLE`. SUPER_ADMIN is the sender - a notice to oneself is a
+ * note, not an announcement - and STUDENT is excluded because nursery-age
+ * children do not sign in; a message meant for a child reaches their guardians,
+ * which is what `NOTIFICATION_AUDIENCE.STUDENT` already does.
+ */
+export const NOTIFICATION_ROLE_TARGET = [
+  USER_ROLE.PARENT,
+  USER_ROLE.TEACHER,
+] as const;
+export type NotificationRoleTarget = (typeof NOTIFICATION_ROLE_TARGET)[number];
+
+export const NOTIFICATION_ROLE_TARGET_LABEL: Record<
+  NotificationRoleTarget,
+  string
+> = {
+  [USER_ROLE.PARENT]: "All parents",
+  [USER_ROLE.TEACHER]: "All teachers",
+};
+
+/**
+ * Length caps. Here rather than beside the schema for the same reason as
+ * MESSAGE_MAX_LENGTH: the composer needs them for `maxLength` on its inputs,
+ * and a client component cannot value-import a Mongoose module.
+ */
+export const NOTIFICATION_TITLE_MAX_LENGTH = 120;
+export const NOTIFICATION_MAX_LENGTH = 2000;

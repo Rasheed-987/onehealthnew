@@ -38,6 +38,11 @@ export {
 export { Message, type IMessage } from "./Message";
 export { Feedback, type IFeedback } from "./Feedback";
 export {
+  Notification,
+  type INotification,
+  type INotificationAudience,
+} from "./Notification";
+export {
   GuardianLinkRequest,
   type IGuardianLinkRequest,
 } from "./GuardianLinkRequest";
