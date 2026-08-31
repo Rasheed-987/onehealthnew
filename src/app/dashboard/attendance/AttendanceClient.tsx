@@ -1,9 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Notice } from "@/components/dashboard/Notice";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useDismissibleError } from "@/hooks/useDismissibleError";
 import { useAttendanceQuery, useClassroomPickerQuery } from "@/hooks/queries";
@@ -91,12 +109,12 @@ export function AttendanceClient() {
               size={16}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
             />
-            <input
+            <Input
               type="date"
               value={date}
               max={todayKey()}
               onChange={(event) => setDate(event.target.value)}
-              className="rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+              className="w-auto pl-9"
             />
           </div>
         </label>
@@ -105,50 +123,51 @@ export function AttendanceClient() {
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             Classroom
           </span>
-          <select
-            value={classroom}
-            onChange={(event) => setClassroom(event.target.value)}
-            className="min-w-48 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          <Select
+            value={classroom || "__all__"}
+            onValueChange={(value) => setClassroom(value === "__all__" ? "" : value)}
           >
-            {/* "All" means all rooms in scope, not all rooms in the school. */}
-            <option value="">All classrooms</option>
-            {classrooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="min-w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {/* "All" means all rooms in scope, not all rooms in the school. */}
+              <SelectItem value="__all__">All classrooms</SelectItem>
+              {classrooms.map((room) => (
+                <SelectItem key={room.id} value={room.id}>
+                  {room.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             Status
           </span>
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="min-w-40 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          <Select
+            value={status || "__all__"}
+            onValueChange={(value) => setStatus(value === "__all__" ? "" : value)}
           >
-            <option value="">All statuses</option>
-            <option value="PRESENT">Present</option>
-            <option value="ABSENT">Absent</option>
-            <option value="LATE">Late</option>
-            <option value="EXCUSED">Excused</option>
-          </select>
+            <SelectTrigger className="min-w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All statuses</SelectItem>
+              <SelectItem value="PRESENT">Present</SelectItem>
+              <SelectItem value="ABSENT">Absent</SelectItem>
+              <SelectItem value="LATE">Late</SelectItem>
+              <SelectItem value="EXCUSED">Excused</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          <span>{loadError}</span>
-          <button
-            type="button"
-            onClick={dismissError}
-            aria-label="Dismiss"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
 
       {summary && summary.total > 0 && (
@@ -175,57 +194,54 @@ export function AttendanceClient() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-semibold">Child</th>
-                <th className="px-4 py-3 font-semibold">Classroom</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Check-in</th>
-                <th className="px-4 py-3 font-semibold">Check-out</th>
-                <th className="px-4 py-3 font-semibold">Note</th>
-                <th className="px-4 py-3 font-semibold">Recorded by</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[820px]">
+            <TableHeader>
+              <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                <TableHead className="px-4 py-3 font-semibold">Child</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Classroom</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Status</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Check-in</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Check-out</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Note</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Recorded by</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isPending ? (
                 <EmptyRow>Loading the register...</EmptyRow>
               ) : records.length === 0 ? (
                 <EmptyRow>{emptyMessage}</EmptyRow>
               ) : (
                 records.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-t border-border transition-colors hover:bg-surface-hover"
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">
+                  <TableRow key={row.id}>
+                    <TableCell className="px-4 py-3 font-medium text-foreground">
                       {row.student.fullName}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted">
                       {row.classroom?.name ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <Badge tone={STATUS_TONE[row.status]}>
                         {row.statusLabel}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted">
                       {row.checkInAt ?? "-"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted">
                       {row.checkOutAt ?? "-"}
-                    </td>
-                    <td className="px-4 py-3 text-muted">{row.note ?? "-"}</td>
-                    <td className="px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted">{row.note ?? "-"}</TableCell>
+                    <TableCell className="px-4 py-3 text-muted">
                       {row.recordedBy?.name ?? "-"}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </>
@@ -247,27 +263,29 @@ function Tile({
     warning: "text-warning",
   } as const;
   return (
-    <div className="rounded-card border border-border bg-surface px-4 py-3 shadow-card">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </div>
-      <div
-        className={`mt-1 text-2xl font-bold ${
-          tone ? tones[tone] : "text-foreground"
-        }`}
-      >
-        {value}
-      </div>
-    </div>
+    <Card className="card-soft">
+      <CardContent className="px-4 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <div
+          className={`mt-1 font-display text-2xl font-bold ${
+            tone ? tones[tone] : "text-foreground"
+          }`}
+        >
+          {value}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <tr>
-      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

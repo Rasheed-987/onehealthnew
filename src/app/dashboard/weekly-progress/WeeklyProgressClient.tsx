@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Notice } from "@/components/dashboard/Notice";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useDismissibleError } from "@/hooks/useDismissibleError";
 import {
@@ -78,26 +97,30 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
             Week
           </span>
           <div className="flex items-center gap-1 rounded-control border border-border bg-surface p-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setWeek(shiftWeeks(week, -1))}
               aria-label="Previous week"
-              className="rounded-control p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+              className="h-8 w-8 text-muted"
             >
               <ChevronLeft size={16} />
-            </button>
+            </Button>
             <span className="min-w-44 px-2 text-center text-sm font-medium text-foreground">
               {meta?.label ?? week}
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setWeek(shiftWeeks(week, 1))}
               disabled={atCurrentWeek}
               aria-label="Next week"
-              className="rounded-control p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
+              className="h-8 w-8 text-muted"
             >
               <ChevronRight size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -105,7 +128,7 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             Jump to
           </span>
-          <input
+          <Input
             type="date"
             value={week}
             max={thisWeekStart()}
@@ -114,7 +137,7 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
             onChange={(event) =>
               event.target.value && setWeek(event.target.value)
             }
-            className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+            className="w-auto"
           />
         </label>
 
@@ -125,33 +148,32 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               Classroom
             </span>
-            <select
-              value={classroom}
-              onChange={(event) => setClassroom(event.target.value)}
-              className="min-w-48 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+            <Select
+              value={classroom || "__all__"}
+              onValueChange={(value) =>
+                setClassroom(value === "__all__" ? "" : value)
+              }
             >
-              <option value="">All my classrooms</option>
-              {classrooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="min-w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All my classrooms</SelectItem>
+                {classrooms.map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
-          <span>{loadError}</span>
-          <button
-            type="button"
-            onClick={dismissError}
-            aria-label="Dismiss"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
 
       {summary && summary.children > 0 && (
@@ -184,21 +206,21 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-semibold">Child</th>
-                <th className="px-4 py-3 font-semibold">Mon - Sun</th>
-                <th className="px-4 py-3 font-semibold">Drinks</th>
-                <th className="px-4 py-3 font-semibold">Nap</th>
-                <th className="px-4 py-3 font-semibold">Mood</th>
-                <th className="px-4 py-3 font-semibold">Needs</th>
-                <th className="px-4 py-3 text-right font-semibold">Week</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                <TableHead className="px-4 py-3 font-semibold">Child</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Mon - Sun</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Drinks</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Nap</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Mood</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Needs</TableHead>
+                <TableHead className="px-4 py-3 text-right font-semibold">Week</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isPending ? (
                 <EmptyRow>Loading the week...</EmptyRow>
               ) : children.length === 0 ? (
@@ -209,11 +231,8 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
                 </EmptyRow>
               ) : (
                 children.map((child) => (
-                  <tr
-                    key={child.student.id}
-                    className="border-t border-border transition-colors hover:bg-surface-hover"
-                  >
-                    <td className="px-4 py-3">
+                  <TableRow key={child.student.id}>
+                    <TableCell className="px-4 py-3">
                       <div className="font-medium text-foreground">
                         {child.student.fullName}
                       </div>
@@ -222,23 +241,23 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
                           {child.classroom.name}
                         </div>
                       )}
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3">
+                    <TableCell className="px-4 py-3">
                       <DayStrip child={child} />
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3 text-muted tabular-nums">
+                    <TableCell className="px-4 py-3 text-muted tabular-nums">
                       {child.drinks || "-"}
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3 text-muted tabular-nums">
+                    <TableCell className="px-4 py-3 text-muted tabular-nums">
                       {child.napMinutes > 0
                         ? formatMinutes(child.napMinutes)
                         : "-"}
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3">
+                    <TableCell className="px-4 py-3">
                       {child.topMood ? (
                         <Badge tone="success">
                           {child.topMood.label}
@@ -247,9 +266,9 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
                       ) : (
                         <span className="text-muted">-</span>
                       )}
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3">
+                    <TableCell className="px-4 py-3">
                       {child.needs.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {child.needs.map((need) => (
@@ -261,22 +280,24 @@ export function WeeklyProgressClient({ canRecord }: { canRecord: boolean }) {
                       ) : (
                         <span className="text-muted">-</span>
                       )}
-                    </td>
+                    </TableCell>
 
-                    <td className="px-4 py-3 text-right">
-                      <button
+                    <TableCell className="px-4 py-3 text-right">
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setOpen(child)}
-                        className="rounded-control px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-subtle"
+                        className="text-primary hover:bg-primary-subtle hover:text-primary"
                       >
                         View
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
@@ -344,28 +365,30 @@ function Tile({
   alarming?: boolean;
 }) {
   return (
-    <div className="rounded-card border border-border bg-surface px-4 py-3 shadow-card">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </div>
-      <div
-        className={`mt-1 text-2xl font-bold tabular-nums ${
-          alarming ? "text-danger" : "text-foreground"
-        }`}
-      >
-        {value}
-      </div>
-      {hint && <div className="mt-0.5 text-xs text-muted">{hint}</div>}
-    </div>
+    <Card className="card-soft">
+      <CardContent className="px-4 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <div
+          className={`mt-1 font-display text-2xl font-bold tabular-nums ${
+            alarming ? "text-danger" : "text-foreground"
+          }`}
+        >
+          {value}
+        </div>
+        {hint && <div className="mt-0.5 text-xs text-muted">{hint}</div>}
+      </CardContent>
+    </Card>
   );
 }
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <tr>
-      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

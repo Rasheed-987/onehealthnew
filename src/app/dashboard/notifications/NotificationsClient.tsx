@@ -1,10 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Plus, Search, X } from "lucide-react";
+import { Bell, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
+import { Notice } from "@/components/dashboard/Notice";
+import { Pagination } from "@/components/dashboard/Pagination";
+import { SearchInput } from "@/components/dashboard/SearchInput";
 import {
   EMPTY_PAGINATION,
   queryKeys,
@@ -115,21 +136,24 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
         {canManage && (
           <label className="flex items-center gap-2 text-sm text-muted">
             Show
-            <select
-              value={perPage}
-              onChange={(event) => {
-                setPerPage(Number(event.target.value));
+            <Select
+              value={String(perPage)}
+              onValueChange={(value) => {
+                setPerPage(Number(value));
                 setPage(1);
               }}
-              aria-label="Rows per page"
-              className="rounded-control border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
             >
-              {PER_PAGE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-9 w-auto" aria-label="Rows per page">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PER_PAGE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             entries
           </label>
         )}
@@ -138,105 +162,81 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
             "what have we sent to families this term". It says nothing useful
             to a reader, who only ever sees notices addressed to them. */}
         {canManage && (
-          <select
-            value={kind}
-            onChange={(event) => {
-              setKind(event.target.value);
+          <Select
+            value={kind || "__all__"}
+            onValueChange={(value) => {
+              setKind(value === "__all__" ? "" : value);
               setPage(1);
             }}
-            aria-label="Filter by audience"
-            className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
           >
-            <option value="">All audiences</option>
-            {(
-              Object.values(NOTIFICATION_AUDIENCE) as NotificationAudienceKind[]
-            ).map((value) => (
-              <option key={value} value={value}>
-                {NOTIFICATION_AUDIENCE_LABEL[value]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-auto" aria-label="Filter by audience">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All audiences</SelectItem>
+              {(
+                Object.values(NOTIFICATION_AUDIENCE) as NotificationAudienceKind[]
+              ).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {NOTIFICATION_AUDIENCE_LABEL[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
 
         {canManage && (
           <label className="flex items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={includeInactive}
-              onChange={(event) => {
-                setIncludeInactive(event.target.checked);
+              onCheckedChange={(checked) => {
+                setIncludeInactive(checked === true);
                 setPage(1);
               }}
-              className="accent-[var(--color-primary,#2f7d4f)]"
             />
             Show withdrawn
           </label>
         )}
 
-        <div className="relative ml-auto min-w-56 flex-1 sm:max-w-xs sm:flex-none">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
-          />
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Search notifications"
-            aria-label="Search notifications"
-            className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search notifications"
+          aria-label="Search notifications"
+          className="ml-auto min-w-56 sm:max-w-xs sm:flex-none"
+        />
 
         {canManage && (
-          <button
-            type="button"
-            onClick={() => setComposing(true)}
-            className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
+          <Button type="button" onClick={() => setComposing(true)}>
             <Plus size={16} />
             Add Notification
-          </button>
+          </Button>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          <span>{loadError}</span>
-          <button type="button" onClick={dismissError} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
-
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label="Dismiss"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
       {canManage ? (
-        <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+        <div className="card-soft overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-surface-muted">
-                <tr className="text-xs uppercase tracking-wide text-muted">
-                  <th className="px-4 py-3 font-semibold">For</th>
-                  <th className="px-4 py-3 font-semibold">Notification</th>
-                  <th className="px-4 py-3 font-semibold">Sent</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[900px]">
+              <TableHeader>
+                <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                  <TableHead className="px-4 py-3 font-semibold">For</TableHead>
+                  <TableHead className="px-4 py-3 font-semibold">Notification</TableHead>
+                  <TableHead className="px-4 py-3 font-semibold">Sent</TableHead>
+                  <TableHead className="px-4 py-3 text-right font-semibold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {query.isPending ? (
                   <EmptyRow colSpan={4}>Loading notifications...</EmptyRow>
                 ) : rows.length === 0 ? (
@@ -247,14 +247,11 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
                   </EmptyRow>
                 ) : (
                   rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-t border-border transition-colors hover:bg-surface-hover"
-                    >
+                    <TableRow key={row.id}>
                       {/* The audience, spelled out. The summary is the row's
                           headline and the chips are the whole list, so an
                           admin never has to open a notice to see who got it. */}
-                      <td className="max-w-xs px-4 py-3 align-top">
+                      <TableCell className="max-w-xs px-4 py-3 align-top">
                         <div className="font-medium text-foreground">
                           {row.audience.label}
                         </div>
@@ -270,8 +267,8 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
                             ))}
                           </div>
                         )}
-                      </td>
-                      <td className="w-full max-w-xl px-4 py-3 align-top">
+                      </TableCell>
+                      <TableCell className="w-full max-w-xl px-4 py-3 align-top">
                         {row.title && (
                           <div className="font-medium text-foreground">
                             {row.title}
@@ -285,74 +282,52 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
                             <Badge tone="danger">Withdrawn</Badge>
                           </span>
                         )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 align-top text-muted">
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-4 py-3 align-top text-muted">
                         <div>{new Date(row.createdAt).toLocaleDateString()}</div>
                         <div className="text-xs">
                           {row.createdBy?.name ?? "Unknown"}
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right align-top">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-right align-top">
                         <div className="flex justify-end gap-2">
-                          <button
+                          <Button
                             type="button"
+                            size="sm"
+                            className="bg-warning text-warning-foreground hover:bg-warning-hover"
                             onClick={() => setEditing(row)}
-                            className="rounded-control bg-warning px-3 py-1.5 text-sm font-semibold text-charcoal-950 transition-colors hover:opacity-90"
                           >
                             Edit
-                          </button>
+                          </Button>
                           {row.isActive ? (
-                            <button
+                            <Button
                               type="button"
+                              variant="destructive"
+                              size="sm"
                               onClick={() => setDeleting(row)}
-                              className="rounded-control bg-danger px-3 py-1.5 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
                             >
                               Delete
-                            </button>
+                            </Button>
                           ) : (
-                            <button
+                            <Button
                               type="button"
+                              variant="outline"
+                              size="sm"
                               onClick={() => restore(row)}
-                              className="rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
                             >
                               Restore
-                            </button>
+                            </Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
-          {pagination.total > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted">
-              <span>
-                Showing {(pagination.page - 1) * pagination.perPage + 1} to{" "}
-                {Math.min(
-                  pagination.page * pagination.perPage,
-                  pagination.total,
-                )}{" "}
-                of {pagination.total} entries
-              </span>
-              <div className="flex gap-2">
-                <PageButton
-                  disabled={pagination.page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </PageButton>
-                <PageButton
-                  disabled={pagination.page >= pagination.pageCount}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </PageButton>
-              </div>
-            </div>
-          )}
+          <Pagination pagination={pagination} onPageChange={setPage} />
         </div>
       ) : (
         <div className="space-y-3">
@@ -367,11 +342,8 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
           ) : (
             <>
               {rows.map((row) => (
-                <article
-                  key={row.id}
-                  className="rounded-card border border-border bg-surface p-4 shadow-card"
-                >
-                  <div className="flex items-start gap-3">
+                <Card key={row.id} className="card-soft">
+                  <CardContent className="flex items-start gap-3 p-4">
                     <Bell size={18} className="mt-0.5 shrink-0 text-primary" />
                     <div className="min-w-0">
                       {row.title && (
@@ -387,25 +359,12 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
                         {row.createdBy && ` · ${row.createdBy.name}`}
                       </p>
                     </div>
-                  </div>
-                </article>
+                  </CardContent>
+                </Card>
               ))}
 
               {pagination.pageCount > 1 && (
-                <div className="flex justify-end gap-2">
-                  <PageButton
-                    disabled={pagination.page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Previous
-                  </PageButton>
-                  <PageButton
-                    disabled={pagination.page >= pagination.pageCount}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </PageButton>
-                </div>
+                <Pagination pagination={pagination} onPageChange={setPage} />
               )}
             </>
           )}
@@ -428,34 +387,19 @@ export function NotificationsClient({ canManage }: { canManage: boolean }) {
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        confirmLabel="Withdraw"
+        destructive
         title="Withdraw notification"
         description="It disappears from every board it is on."
       >
-        <div className="px-6 py-5 text-sm text-foreground">
-          Withdraw the notification sent to{" "}
-          <strong>{deleting?.audience.label ?? "this audience"}</strong>? It is
-          kept so it can be restored, but nobody will see it any more.
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setDeleting(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirmDelete}
-            className="rounded-control bg-danger px-4 py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
-          >
-            Withdraw
-          </button>
-        </div>
-      </Modal>
+        Withdraw the notification sent to{" "}
+        <strong>{deleting?.audience.label ?? "this audience"}</strong>? It is
+        kept so it can be restored, but nobody will see it any more.
+      </ConfirmDialog>
     </>
   );
 }
@@ -468,42 +412,21 @@ function EmptyRow({
   colSpan: number;
 }) {
   return (
-    <tr>
-      <td
+    <TableRow className="hover:bg-transparent">
+      <TableCell
         colSpan={colSpan}
         className="px-4 py-10 text-center text-sm text-muted"
       >
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 function EmptyCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-card border border-dashed border-border-strong bg-surface p-10 text-center text-sm text-muted">
+    <div className="card-soft border-dashed p-10 text-center text-sm text-muted">
       {children}
     </div>
-  );
-}
-
-function PageButton({
-  children,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }

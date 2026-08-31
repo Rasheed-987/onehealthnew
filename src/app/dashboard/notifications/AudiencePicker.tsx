@@ -161,7 +161,7 @@ export function AudiencePicker({
               name="audience-kind"
               checked={draft.kind === kind}
               onChange={() => set({ kind })}
-              className="mt-1 accent-[var(--color-primary,#2f7d4f)]"
+              className="mt-1 accent-primary"
             />
             <span>
               <span className="block text-sm font-medium text-foreground">
@@ -433,7 +433,7 @@ function CheckRow({
         type="checkbox"
         checked={checked}
         onChange={onToggle}
-        className="mt-1 accent-[var(--color-primary,#2f7d4f)]"
+        className="mt-1 accent-primary"
       />
       <span>
         <span className="block text-sm font-medium text-foreground">{label}</span>

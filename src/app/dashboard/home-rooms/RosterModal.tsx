@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, UserMinus, UserPlus } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
-import { Badge } from "@/components/ui/Field";
+import { Badge, SelectField } from "@/components/ui/Field";
 import {
   queryKeys,
   useAssignableStudentsQuery,
@@ -149,24 +149,19 @@ export function RosterModal({
         {canAssign && (
           <div className="mb-4 flex flex-wrap items-end gap-2">
             <div className="min-w-56 flex-1">
-              <label htmlFor="enrol-student" className="text-xs text-muted">
-                Add a child
-              </label>
-              <select
-                id="enrol-student"
+              <SelectField
+                label="Add a child"
+                name="enrol-student"
                 value={picked}
                 onChange={(event) => setPicked(event.target.value)}
-                className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-              >
-                <option value="">Choose a child...</option>
-                {selectable.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.fullName} ({option.age})
-                    {option.parentName ? ` • Parent: ${option.parentName}` : ""}
-                    {option.currentClassroomId ? " - currently seated" : ""}
-                  </option>
-                ))}
-              </select>
+                placeholder="Choose a child..."
+                options={selectable.map((option) => ({
+                  value: option.id,
+                  label: `${option.fullName} (${option.age})${
+                    option.parentName ? ` • Parent: ${option.parentName}` : ""
+                  }${option.currentClassroomId ? " - currently seated" : ""}`,
+                }))}
+              />
             </div>
             <button
               type="button"

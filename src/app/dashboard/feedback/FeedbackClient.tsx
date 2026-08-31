@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 
-import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
+import { Notice } from "@/components/dashboard/Notice";
+import { Pagination } from "@/components/dashboard/Pagination";
+import { SearchInput } from "@/components/dashboard/SearchInput";
 import {
   EMPTY_PAGINATION,
   queryKeys,
@@ -151,99 +170,80 @@ export function FeedbackClient({
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-muted">
           Show
-          <select
-            value={perPage}
-            onChange={(event) => {
-              setPerPage(Number(event.target.value));
+          <Select
+            value={String(perPage)}
+            onValueChange={(value) => {
+              setPerPage(Number(value));
               setPage(1);
             }}
-            aria-label="Rows per page"
-            className="rounded-control border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
           >
-            {PER_PAGE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 w-auto" aria-label="Rows per page">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PER_PAGE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           entries
         </label>
 
-        <select
-          value={experience}
-          onChange={(event) => {
-            setExperience(event.target.value);
+        <Select
+          value={experience || "__all__"}
+          onValueChange={(value) => {
+            setExperience(value === "__all__" ? "" : value);
             setPage(1);
           }}
-          aria-label="Filter by experience"
-          className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
         >
-          <option value="">All experiences</option>
-          {Object.values(FEEDBACK_EXPERIENCE).map((value) => (
-            <option key={value} value={value}>
-              {FEEDBACK_EXPERIENCE_LABEL[value]}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-auto" aria-label="Filter by experience">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All experiences</SelectItem>
+            {Object.values(FEEDBACK_EXPERIENCE).map((value) => (
+              <SelectItem key={value} value={value}>
+                {FEEDBACK_EXPERIENCE_LABEL[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <div className="relative ml-auto min-w-56 flex-1 sm:max-w-xs sm:flex-none">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
-          />
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder={
-              showUser ? "Search feedback or name" : "Search your feedback"
-            }
-            aria-label="Search feedback"
-            className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          placeholder={
+            showUser ? "Search feedback or name" : "Search your feedback"
+          }
+          aria-label="Search feedback"
+          className="ml-auto min-w-56 sm:max-w-xs sm:flex-none"
+        />
 
         {canSubmit && (
-          <button
-            type="button"
-            onClick={() => setComposing(true)}
-            className="rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
+          <Button type="button" onClick={() => setComposing(true)}>
             Share feedback
-          </button>
+          </Button>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/25 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          <span>{loadError}</span>
-          <button type="button" onClick={dismissError} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label="Dismiss"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                {showUser && <th className="px-4 py-3 font-semibold">User</th>}
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                {showUser && <TableHead className="px-4 py-3 font-semibold">User</TableHead>}
                 <SortableHeader
                   label="Experience"
                   column="experience"
@@ -273,11 +273,11 @@ export function FeedbackClient({
                   onSort={sortBy}
                 />
                 {canDelete && (
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <TableHead className="px-4 py-3 text-right font-semibold">Actions</TableHead>
                 )}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {query.isPending ? (
                 <EmptyRow colSpan={columns}>Loading feedback...</EmptyRow>
               ) : rows.length === 0 ? (
@@ -290,12 +290,9 @@ export function FeedbackClient({
                 </EmptyRow>
               ) : (
                 rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-t border-border transition-colors hover:bg-surface-hover"
-                  >
+                  <TableRow key={row.id}>
                     {showUser && (
-                      <td className="px-4 py-3">
+                      <TableCell className="px-4 py-3">
                         {row.user ? (
                           <>
                             <div className="font-medium text-foreground">
@@ -309,65 +306,44 @@ export function FeedbackClient({
                           // The row outlives the account that left it.
                           <span className="text-muted">N/A</span>
                         )}
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="px-4 py-3 text-muted">
+                    <TableCell className="px-4 py-3 text-muted">
                       {row.experienceLabel}
-                    </td>
+                    </TableCell>
                     {/* The column the reader actually came for: given the room
                         to be read, and wrapped rather than truncated. */}
-                    <td className="w-full max-w-xl px-4 py-3 text-foreground">
+                    <TableCell className="w-full max-w-xl px-4 py-3 text-foreground">
                       <p className="whitespace-pre-wrap break-words">
                         {row.comment}
                       </p>
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <Stars value={row.stars} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap px-4 py-3 text-muted">
                       {formatSubmittedAt(row.createdAt)}
-                    </td>
+                    </TableCell>
                     {canDelete && (
-                      <td className="px-4 py-3 text-right">
-                        <button
+                      <TableCell className="px-4 py-3 text-right">
+                        <Button
                           type="button"
+                          variant="destructive"
+                          size="sm"
                           onClick={() => setDeleting(row)}
-                          className="rounded-control bg-danger px-3 py-1.5 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
                         >
                           Delete
-                        </button>
-                      </td>
+                        </Button>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
-        {pagination.total > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted">
-            <span>
-              Showing {(pagination.page - 1) * pagination.perPage + 1} to{" "}
-              {Math.min(pagination.page * pagination.perPage, pagination.total)}{" "}
-              of {pagination.total} entries
-            </span>
-            <div className="flex gap-2">
-              <PageButton
-                disabled={pagination.page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </PageButton>
-              <PageButton
-                disabled={pagination.page >= pagination.pageCount}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </PageButton>
-            </div>
-          </div>
-        )}
+        <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
 
       {composing && (
@@ -381,35 +357,20 @@ export function FeedbackClient({
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        confirmLabel="Delete"
+        destructive
         title="Delete feedback"
         description="This removes the comment permanently."
       >
-        <div className="px-6 py-5 text-sm text-foreground">
-          Delete the feedback from{" "}
-          <strong>{deleting?.user?.name ?? "this family"}</strong>? Unlike a
-          gallery post this is not recoverable - there is no archived copy to
-          restore it from.
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setDeleting(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirmDelete}
-            className="rounded-control bg-danger px-4 py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
-          >
-            Delete
-          </button>
-        </div>
-      </Modal>
+        Delete the feedback from{" "}
+        <strong>{deleting?.user?.name ?? "this family"}</strong>? Unlike a
+        gallery post this is not recoverable - there is no archived copy to
+        restore it from.
+      </ConfirmDialog>
     </>
   );
 }
@@ -440,7 +401,7 @@ function SortableHeader({
       : ChevronDown;
 
   return (
-    <th
+    <TableHead
       className="px-4 py-3 font-semibold"
       aria-sort={
         active ? (order === "asc" ? "ascending" : "descending") : "none"
@@ -458,7 +419,7 @@ function SortableHeader({
           aria-hidden="true"
         />
       </button>
-    </th>
+    </TableHead>
   );
 }
 
@@ -479,34 +440,13 @@ function EmptyRow({
   colSpan: number;
 }) {
   return (
-    <tr>
-      <td
+    <TableRow className="hover:bg-transparent">
+      <TableCell
         colSpan={colSpan}
         className="px-4 py-10 text-center text-sm text-muted"
       >
         {children}
-      </td>
-    </tr>
-  );
-}
-
-function PageButton({
-  children,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
+      </TableCell>
+    </TableRow>
   );
 }

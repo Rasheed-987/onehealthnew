@@ -107,30 +107,29 @@ export function SignInForm({ redirectTo }: { redirectTo: string }) {
             aria-describedby={
               fieldErrors.password ? "password-error" : undefined
             }
-            className="w-full rounded-control border border-border bg-surface px-3 py-2.5 pr-11 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 aria-[invalid=true]:border-danger"
+            className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 pr-11 text-xs text-foreground placeholder:text-subtle transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-danger"
           />
           <button
             type="button"
             onClick={() => setShowPassword((shown) => !shown)}
-            // The label is on the button, so the icon itself is decorative.
             aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-control text-subtle transition-colors hover:text-muted focus-visible:text-muted"
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-subtle transition-colors hover:text-muted focus-visible:text-muted"
           >
             <EyeIcon crossed={showPassword} />
           </button>
         </div>
         {fieldErrors.password && (
-          <p id="password-error" className="mt-1.5 text-sm text-danger">
+          <p id="password-error" className="mt-1.5 text-xs font-medium text-danger">
             {fieldErrors.password}
           </p>
         )}
       </div>
 
-      <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-foreground">
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-semibold text-foreground/80 hover:text-foreground transition-colors">
         <input
           type="checkbox"
           name="rememberMe"
-          className="h-4 w-4 cursor-pointer rounded-sm border-border-strong accent-primary"
+          className="h-4 w-4 cursor-pointer rounded-md border-border accent-primary transition-transform hover:scale-105"
         />
         Remember Me
       </label>
@@ -138,7 +137,7 @@ export function SignInForm({ redirectTo }: { redirectTo: string }) {
       <button
         type="submit"
         disabled={busy}
-        className="mt-1 w-full rounded-control bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition-colors hover:bg-primary-hover active:bg-primary-active disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-2 w-full rounded-xl bg-primary px-4 py-3 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-card hover:opacity-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>
@@ -158,7 +157,7 @@ function Field({
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label htmlFor={name} className="text-sm font-medium text-foreground">
+      <label htmlFor={name} className="text-xs font-semibold text-foreground">
         {label}
       </label>
       <input
@@ -166,11 +165,11 @@ function Field({
         name={name}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : undefined}
-        className="mt-1.5 w-full rounded-control border border-border bg-surface px-3 py-2.5 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25 aria-[invalid=true]:border-danger"
+        className="mt-1.5 w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-xs text-foreground placeholder:text-subtle transition-all duration-200 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-danger"
         {...inputProps}
       />
       {error && (
-        <p id={`${name}-error`} className="mt-1.5 text-sm text-danger">
+        <p id={`${name}-error`} className="mt-1.5 text-xs font-medium text-danger">
           {error}
         </p>
       )}

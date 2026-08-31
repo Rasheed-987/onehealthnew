@@ -41,7 +41,7 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <div
-        className="fixed inset-0 bg-charcoal-950/45"
+        className="fixed inset-0 bg-foreground/40 backdrop-blur-xs"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -49,20 +49,20 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${width} rounded-card border border-border bg-surface shadow-overlay`}
+        className={`relative w-full ${width} rounded-card border border-border bg-surface shadow-overlay overflow-hidden`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-4.5 bg-surface-muted">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+            <h2 className="text-base font-bold text-foreground">{title}</h2>
             {description && (
-              <p className="mt-0.5 text-sm text-muted">{description}</p>
+              <p className="mt-0.5 text-xs text-muted">{description}</p>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-mr-2 rounded-control p-2 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+            className="-mr-1 rounded-control p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-foreground"
           >
             <X size={18} />
           </button>

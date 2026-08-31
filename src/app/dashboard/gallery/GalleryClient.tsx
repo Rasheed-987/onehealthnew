@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Users, X } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Modal } from "@/components/ui/Modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
+import { Notice } from "@/components/dashboard/Notice";
 import {
   queryKeys,
   useClassroomPickerQuery,
@@ -94,18 +105,22 @@ export function GalleryClient({
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               Classroom
             </span>
-            <select
-              value={classroom}
-              onChange={(event) => setClassroom(event.target.value)}
-              className="min-w-48 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+            <Select
+              value={classroom || "__all__"}
+              onValueChange={(value) => setClassroom(value === "__all__" ? "" : value)}
             >
-              <option value="">All classrooms</option>
-              {classrooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="min-w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All classrooms</SelectItem>
+                {classrooms.map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         )}
 
@@ -113,49 +128,38 @@ export function GalleryClient({
           <span className="text-xs font-semibold uppercase tracking-wide text-muted">
             Type
           </span>
-          <select
-            value={type}
-            onChange={(event) => setType(event.target.value)}
-            className="min-w-40 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          <Select
+            value={type || "__all__"}
+            onValueChange={(value) => setType(value === "__all__" ? "" : value)}
           >
-            <option value="">All types</option>
-            {Object.values(GALLERY_ITEM_TYPE).map((value) => (
-              <option key={value} value={value}>
-                {GALLERY_ITEM_TYPE_LABEL[value]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="min-w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All types</SelectItem>
+              {Object.values(GALLERY_ITEM_TYPE).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {GALLERY_ITEM_TYPE_LABEL[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         {canCreate && (
-          <button
-            type="button"
-            onClick={() => setUploading(true)}
-            className="ml-auto flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
+          <Button type="button" className="ml-auto" onClick={() => setUploading(true)}>
             <Plus size={16} />
             Post a photo
-          </button>
+          </Button>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/40 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          <span>{loadError}</span>
-          <button type="button" onClick={dismissError} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
-
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
       {isPending ? (
         <EmptyState>Loading the gallery...</EmptyState>
@@ -168,10 +172,7 @@ export function GalleryClient({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <article
-              key={item.id}
-              className="overflow-hidden rounded-card border border-border bg-surface shadow-card"
-            >
+            <Card key={item.id} className="card-soft overflow-hidden p-0">
               <button
                 type="button"
                 onClick={() => setViewing(item)}
@@ -181,7 +182,7 @@ export function GalleryClient({
                 <Media item={item} className="h-44 w-full object-cover" />
               </button>
 
-              <div className="space-y-2 p-4">
+              <CardContent className="space-y-2 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-sm font-semibold text-foreground">
                     {item.title ?? item.typeLabel}
@@ -208,18 +209,20 @@ export function GalleryClient({
 
                 {canDelete && (
                   <div className="flex justify-end">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setDeleting(item)}
                       aria-label={`Remove ${item.title ?? "photo"}`}
-                      className="rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle"
+                      className="text-danger hover:bg-danger-subtle hover:text-danger"
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </Button>
                   </div>
                 )}
-              </div>
-            </article>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -272,33 +275,18 @@ export function GalleryClient({
         </Modal>
       )}
 
-      <Modal
+      <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        confirmLabel="Remove"
+        destructive
         title="Remove photo"
         description="It disappears from every family feed."
       >
-        <div className="px-6 py-5 text-sm text-foreground">
-          Remove <strong>{deleting?.title ?? "this photo"}</strong>? The post is
-          kept so it can be restored, but no family will see it any more.
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setDeleting(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirmDelete}
-            className="rounded-control bg-danger px-4 py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
-          >
-            Remove
-          </button>
-        </div>
-      </Modal>
+        Remove <strong>{deleting?.title ?? "this photo"}</strong>? The post is
+        kept so it can be restored, but no family will see it any more.
+      </ConfirmDialog>
     </>
   );
 }
@@ -330,7 +318,7 @@ function Media({
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-card border border-dashed border-border-strong bg-surface p-10 text-center text-sm text-muted">
+    <div className="card-soft border-dashed p-10 text-center text-sm text-muted">
       {children}
     </div>
   );

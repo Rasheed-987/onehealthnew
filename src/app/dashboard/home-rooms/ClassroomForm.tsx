@@ -215,8 +215,9 @@ export function ClassroomForm({
                   {teachers.map((row, index) => (
                     <div key={index} className="flex flex-wrap items-end gap-2">
                       <div className="min-w-48 flex-1">
-                        <label className="text-xs text-muted">Teacher</label>
-                        <select
+                        <SelectField
+                          label="Teacher"
+                          name={`teacher-${index}`}
                           value={row.teacher}
                           onChange={(event) =>
                             setTeachers((rows) =>
@@ -227,20 +228,18 @@ export function ClassroomForm({
                               ),
                             )
                           }
-                          className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-                        >
-                          <option value="">Choose a teacher...</option>
-                          {availableFor(index).map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.name}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Choose a teacher..."
+                          options={availableFor(index).map((option) => ({
+                            value: option.id,
+                            label: option.name,
+                          }))}
+                        />
                       </div>
 
                       <div className="w-44">
-                        <label className="text-xs text-muted">Role</label>
-                        <select
+                        <SelectField
+                          label="Role"
+                          name={`role-${index}`}
                           value={row.role}
                           onChange={(event) =>
                             setTeachers((rows) =>
@@ -260,15 +259,11 @@ export function ClassroomForm({
                               ),
                             )
                           }
-                          className="mt-1 w-full rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-                        >
-                          <option value={CLASSROOM_TEACHER_ROLE.LEAD}>
-                            Class teacher
-                          </option>
-                          <option value={CLASSROOM_TEACHER_ROLE.ASSISTANT}>
-                            Additional teacher
-                          </option>
-                        </select>
+                          options={[
+                            { value: CLASSROOM_TEACHER_ROLE.LEAD, label: "Class teacher" },
+                            { value: CLASSROOM_TEACHER_ROLE.ASSISTANT, label: "Additional teacher" },
+                          ]}
+                        />
                       </div>
 
                       <button

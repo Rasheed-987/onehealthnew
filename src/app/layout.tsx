@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Baloo_2, Nunito } from "next/font/google";
 import "./globals.css";
 
 import { QueryProvider } from "@/components/QueryProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const baloo2 = Baloo_2({
+  variable: "--font-display",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const nunito = Nunito({
+  variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -28,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${baloo2.variable} ${nunito.variable} h-full antialiased`}
     >
       {/* The provider takes `children` as a slot, so everything inside it -
           every page, every layout - stays a server component. */}

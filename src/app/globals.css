@@ -1,119 +1,110 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   1. Brand palette - the raw colors.
-   The five supplied brand colors are marked; each scale is built around them
-   so hover / active / subtle states have somewhere to go.
---------------------------------------------------------------------------- */
-:root {
-  --green: #2e9e44;
-  --red: #d62828;
-  --charcoal: #4a4a4a;
-  --off-white: #f8f9fa;
-  --dark-charcoal: #1e1f20;
-
-  --green-50: #edf8ef;
-  --green-100: #d3efd9;
-  --green-200: #a8dfb5;
-  --green-300: #7acd8f;
-  --green-400: #52b76b;
-  --green-500: #2e9e44; /* brand */
-  --green-600: #268238;
-  --green-700: #1e682d;
-  --green-800: #184f23;
-  --green-900: #123a1a;
-
-  --red-50: #fdeded;
-  --red-100: #fad5d5;
-  --red-200: #f4adad;
-  --red-300: #ec8080;
-  --red-400: #e15353;
-  --red-500: #d62828; /* brand */
-  --red-600: #b31f1f;
-  --red-700: #8d1919;
-  --red-800: #6b1313;
-  --red-900: #4d0e0e;
-
-  /* Neutrals anchored to off-white, charcoal and dark-charcoal. */
-  --neutral-50: #f8f9fa; /* brand: off-white */
-  --neutral-100: #f1f3f5;
-  --neutral-200: #e4e6e9;
-  --neutral-300: #cdd1d5;
-  --neutral-400: #9ba0a5;
-  --neutral-500: #6e7276;
-  --neutral-600: #4a4a4a; /* brand: charcoal */
-  --neutral-700: #3a3b3c;
-  --neutral-800: #2a2b2c;
-  --neutral-900: #1e1f20; /* brand: dark-charcoal */
-  --neutral-950: #141516;
-
-  /*
-    Amber is NOT part of the supplied palette. A dashboard needs a third,
-    non-destructive action / warning state (edit buttons, pending badges).
-    Replace these two values once the brand defines one.
-  */
-  --amber-500: #e8912a;
-  --amber-600: #c4761c;
-}
-
-/* ---------------------------------------------------------------------------
-   2. Semantic tokens - what the UI actually consumes.
-   Light theme only: `color-scheme: light` also keeps native controls
-   (scrollbars, selects, date pickers) light on machines set to dark mode.
+   Design System — ported from the Eduvista design prototype.
+   Palette pulled from the Letters & Numbers logo, expressed in oklch.
+   Light theme only for now; dark values are kept for a later toggle.
 --------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
 
-  --background: var(--off-white);
-  --foreground: var(--dark-charcoal);
+  --radius: 1rem;
 
-  --surface: #ffffff;
-  --surface-muted: var(--neutral-100);
-  --surface-hover: var(--neutral-100);
+  /* Crayon accent palette (logo colours) */
+  --crayon-red: oklch(0.6 0.21 25);
+  --crayon-orange: oklch(0.72 0.17 55);
+  --crayon-yellow: oklch(0.84 0.15 90);
+  --crayon-green: oklch(0.66 0.16 145);
+  --crayon-teal: oklch(0.6 0.11 195);
+  --crayon-blue: oklch(0.55 0.16 250);
+  --crayon-purple: oklch(0.55 0.17 305);
 
-  --border: var(--neutral-200);
-  --border-strong: var(--neutral-300);
+  /* Surfaces & text */
+  --background: oklch(0.985 0.008 95);
+  --foreground: oklch(0.28 0.03 265);
 
-  --muted-foreground: var(--neutral-500);
-  --subtle-foreground: var(--neutral-400);
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.955 0.012 95);
+  --surface-hover: oklch(0.95 0.03 95);
 
-  --primary: var(--green-500);
-  --primary-hover: var(--green-600);
-  --primary-active: var(--green-700);
-  --primary-subtle: var(--green-50);
-  --primary-foreground: #ffffff;
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.28 0.03 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.28 0.03 265);
 
-  --danger: var(--red-500);
-  --danger-hover: var(--red-600);
-  --danger-subtle: var(--red-50);
-  --danger-foreground: #ffffff;
+  --border: oklch(0.9 0.015 90);
+  --border-strong: oklch(0.85 0.02 90);
+  --input: oklch(0.9 0.015 90);
 
-  --warning: var(--amber-500);
-  --warning-hover: var(--amber-600);
-  --warning-foreground: #ffffff;
+  --muted-foreground: oklch(0.53 0.03 250);
+  --subtle-foreground: oklch(0.62 0.028 250);
 
-  --success: var(--green-500);
-  --success-subtle: var(--green-50);
+  /* Primary action — teal */
+  --primary: oklch(0.55 0.13 200);
+  --primary-hover: oklch(0.5 0.13 200);
+  --primary-active: oklch(0.45 0.12 200);
+  --primary-subtle: oklch(0.95 0.03 200);
+  --primary-foreground: oklch(0.99 0.005 95);
 
-  --ring: var(--green-500);
+  --secondary: oklch(0.95 0.03 95);
+  --secondary-foreground: oklch(0.35 0.05 60);
 
-  /* Sidebar / app shell */
-  --sidebar: #ffffff;
-  --sidebar-foreground: var(--charcoal);
-  --sidebar-muted: var(--neutral-400);
-  --sidebar-border: var(--neutral-200);
-  --sidebar-hover: var(--neutral-100);
-  --sidebar-active: var(--green-500);
-  --sidebar-active-foreground: #ffffff;
+  --accent: oklch(0.72 0.17 55);
+  --accent-foreground: oklch(0.99 0.005 95);
 
-  /* dark-charcoal as an rgb triplet, so shadows can take an alpha */
-  --shadow-color: 30 31 32;
+  /* Danger / Destructive */
+  --danger: oklch(0.6 0.21 25);
+  --danger-strong: oklch(0.45 0.18 25);
+  --danger-hover: oklch(0.55 0.21 25);
+  --danger-subtle: oklch(0.95 0.04 25);
+  --danger-foreground: oklch(0.99 0.005 95);
+
+  /* Warning */
+  --warning: oklch(0.72 0.16 70);
+  --warning-hover: oklch(0.66 0.16 70);
+  --warning-subtle: oklch(0.96 0.05 90);
+  --warning-foreground: oklch(0.3 0.04 60);
+
+  /* Success */
+  --success: oklch(0.66 0.16 145);
+  --success-strong: oklch(0.42 0.14 140);
+  --success-subtle: oklch(0.95 0.04 150);
+  --success-foreground: oklch(0.99 0.005 95);
+
+  --ring: oklch(0.6 0.11 195);
+
+  /* Sidebar */
+  --sidebar: oklch(0.99 0.008 95);
+  --sidebar-foreground: oklch(0.3 0.03 265);
+  --sidebar-muted: oklch(0.6 0.028 250);
+  --sidebar-primary: oklch(0.55 0.13 200);
+  --sidebar-primary-foreground: oklch(0.99 0.005 95);
+  --sidebar-accent: oklch(0.95 0.03 95);
+  --sidebar-accent-foreground: oklch(0.32 0.05 200);
+  --sidebar-border: oklch(0.92 0.015 90);
+  --sidebar-hover: oklch(0.96 0.012 95);
+  --sidebar-active: oklch(0.55 0.13 200);
+  --sidebar-active-foreground: oklch(0.99 0.005 95);
+  --sidebar-ring: oklch(0.6 0.11 195);
+
+  /* Controls */
+  --radius-card: var(--radius);
+  --radius-control: calc(var(--radius) - 4px);
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 oklch(0.4 0.05 250 / 0.06);
+  --shadow-card: 0 8px 24px -18px oklch(0.4 0.05 250 / 0.6);
+  --shadow-raised: 0 10px 25px -5px oklch(0.4 0.05 250 / 0.12), 0 8px 10px -6px oklch(0.4 0.05 250 / 0.08);
+  --shadow-overlay: 0 20px 45px -12px oklch(0.35 0.05 250 / 0.28);
 }
 
 /* ---------------------------------------------------------------------------
-   3. Expose the tokens to Tailwind.
-   `inline` keeps the var() reference inside the generated utility, so a token
-   can be retuned in one place and every utility follows.
+   Tailwind v4 inline theme — exposes tokens as utilities.
+   Both the Eduvista/shadcn names and the Letters & Numbers names are mapped
+   onto the same values so ported primitives and existing screens agree.
 --------------------------------------------------------------------------- */
 @theme inline {
   --color-background: var(--background);
@@ -123,10 +114,17 @@
   --color-surface-muted: var(--surface-muted);
   --color-surface-hover: var(--surface-hover);
 
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
 
   --color-muted: var(--muted-foreground);
+  --color-muted-foreground: var(--muted-foreground);
   --color-subtle: var(--subtle-foreground);
 
   --color-primary: var(--primary);
@@ -135,82 +133,106 @@
   --color-primary-subtle: var(--primary-subtle);
   --color-primary-foreground: var(--primary-foreground);
 
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
   --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
   --color-danger-hover: var(--danger-hover);
   --color-danger-subtle: var(--danger-subtle);
   --color-danger-foreground: var(--danger-foreground);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-foreground);
 
   --color-warning: var(--warning);
   --color-warning-hover: var(--warning-hover);
+  --color-warning-subtle: var(--warning-subtle);
   --color-warning-foreground: var(--warning-foreground);
 
   --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
   --color-success-subtle: var(--success-subtle);
+  --color-success-foreground: var(--success-foreground);
 
   --color-ring: var(--ring);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-hover: var(--sidebar-hover);
   --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Raw brand scales, for cases where a semantic token is too blunt. */
-  --color-green-50: var(--green-50);
-  --color-green-100: var(--green-100);
-  --color-green-200: var(--green-200);
-  --color-green-300: var(--green-300);
-  --color-green-400: var(--green-400);
-  --color-green-500: var(--green-500);
-  --color-green-600: var(--green-600);
-  --color-green-700: var(--green-700);
-  --color-green-800: var(--green-800);
-  --color-green-900: var(--green-900);
+  /* Crayon palette */
+  --color-crayon-red: var(--crayon-red);
+  --color-crayon-orange: var(--crayon-orange);
+  --color-crayon-yellow: var(--crayon-yellow);
+  --color-crayon-green: var(--crayon-green);
+  --color-crayon-teal: var(--crayon-teal);
+  --color-crayon-blue: var(--crayon-blue);
+  --color-crayon-purple: var(--crayon-purple);
 
-  --color-red-50: var(--red-50);
-  --color-red-100: var(--red-100);
-  --color-red-200: var(--red-200);
-  --color-red-300: var(--red-300);
-  --color-red-400: var(--red-400);
-  --color-red-500: var(--red-500);
-  --color-red-600: var(--red-600);
-  --color-red-700: var(--red-700);
-  --color-red-800: var(--red-800);
-  --color-red-900: var(--red-900);
+  /* Legacy aliases kept so existing class names resolve */
+  --color-brand-green: var(--crayon-green);
+  --color-coral: var(--crayon-red);
+  --color-amber: var(--crayon-orange);
+  --color-blue: var(--crayon-blue);
+  --color-purple: var(--crayon-purple);
+  --color-charcoal: var(--foreground);
+  --color-slate: var(--muted-foreground);
+  --color-mint: var(--success-subtle);
+  --color-cream: var(--warning-subtle);
 
-  --color-charcoal-50: var(--neutral-50);
-  --color-charcoal-100: var(--neutral-100);
-  --color-charcoal-200: var(--neutral-200);
-  --color-charcoal-300: var(--neutral-300);
-  --color-charcoal-400: var(--neutral-400);
-  --color-charcoal-500: var(--neutral-500);
-  --color-charcoal-600: var(--neutral-600);
-  --color-charcoal-700: var(--neutral-700);
-  --color-charcoal-800: var(--neutral-800);
-  --color-charcoal-900: var(--neutral-900);
-  --color-charcoal-950: var(--neutral-950);
+  --font-display: var(--font-display), "Baloo 2", ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-sans), "Nunito", ui-sans-serif, system-ui, sans-serif;
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
 
-  --radius-card: 0.5rem;
-  --radius-control: 0.375rem;
-
-  --shadow-card: 0 1px 3px rgb(var(--shadow-color) / 0.08), 0 1px 2px rgb(var(--shadow-color) / 0.04);
-  --shadow-raised: 0 4px 12px rgb(var(--shadow-color) / 0.1);
-  --shadow-overlay: 0 12px 32px rgb(var(--shadow-color) / 0.16);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
 }
 
 /* ---------------------------------------------------------------------------
-   4. Base layer
+   Base layer
 --------------------------------------------------------------------------- */
 @layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
   body {
-    background: var(--background);
+    background-color: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    color: var(--foreground);
+    letter-spacing: -0.015em;
+    font-weight: 700;
   }
 
   :focus-visible {
@@ -220,6 +242,41 @@
 
   ::selection {
     background: var(--primary);
-    color: var(--primary-foreground);
+    color: oklch(0.99 0.005 95);
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Utility classes
+--------------------------------------------------------------------------- */
+@utility card-soft {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+@utility card-clean {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+@utility badge-active {
+  background-color: var(--success-subtle);
+  color: var(--success);
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+@utility badge-inactive {
+  background-color: var(--danger-subtle);
+  color: var(--danger);
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
 }

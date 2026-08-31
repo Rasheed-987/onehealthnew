@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Notice } from "@/components/dashboard/Notice";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   queryKeys,
@@ -86,12 +105,12 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
               size={16}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
             />
-            <input
+            <Input
               type="date"
               value={date}
               max={todayKey()}
               onChange={(event) => setDate(event.target.value)}
-              className="rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+              className="w-auto pl-9"
             />
           </div>
         </label>
@@ -103,39 +122,34 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               Classroom
             </span>
-            <select
-              value={classroom}
-              onChange={(event) => setClassroom(event.target.value)}
-              className="min-w-48 rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+            <Select
+              value={classroom || "__none__"}
+              onValueChange={(value) =>
+                setClassroom(value === "__none__" ? "" : value)
+              }
             >
-              <option value="">Choose a classroom</option>
-              {classrooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="min-w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Choose a classroom</SelectItem>
+                {classrooms.map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
-          <span>{loadError}</span>
-          <button type="button" onClick={dismissError} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
-
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
       {summary && summary.total > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -151,21 +165,21 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-semibold">Child</th>
-                <th className="px-4 py-3 font-semibold">Drinks</th>
-                <th className="px-4 py-3 font-semibold">Mood</th>
-                <th className="px-4 py-3 font-semibold">Toilet</th>
-                <th className="px-4 py-3 font-semibold">Sleep</th>
-                <th className="px-4 py-3 font-semibold">Needs</th>
-                <th className="px-4 py-3 text-right font-semibold">Sheet</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[860px]">
+            <TableHeader>
+              <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                <TableHead className="px-4 py-3 font-semibold">Child</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Drinks</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Mood</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Toilet</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Sleep</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Needs</TableHead>
+                <TableHead className="px-4 py-3 text-right font-semibold">Sheet</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isPending ? (
                 <EmptyRow>Loading sheets...</EmptyRow>
               ) : entries.length === 0 ? (
@@ -179,11 +193,8 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
                   const sheet = entry.sheet;
                   const started = sheet && !sheet.isEmpty;
                   return (
-                    <tr
-                      key={entry.student.id}
-                      className="border-t border-border transition-colors hover:bg-surface-hover"
-                    >
-                      <td className="px-4 py-3">
+                    <TableRow key={entry.student.id}>
+                      <TableCell className="px-4 py-3">
                         <div className="font-medium text-foreground">
                           {entry.student.fullName}
                         </div>
@@ -192,11 +203,11 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
                             <Badge tone="warning">Moved room today</Badge>
                           </div>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-muted">
                         {sheet?.drinks.length || "-"}
-                      </td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
                         {sheet && sheet.moodLabels.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {sheet.moodLabels.map((label) => (
@@ -208,19 +219,19 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
                         ) : (
                           <span className="text-muted">-</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-muted">
                         {sheet?.toilet.length || "-"}
-                      </td>
-                      <td className="px-4 py-3 text-muted">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-muted">
                         {sheet && sheet.naps.length > 0
                           ? `${sheet.naps.reduce(
                               (m, n) => m + (n.minutes ?? 0),
                               0,
                             )} min`
                           : "-"}
-                      </td>
-                      <td className="px-4 py-3">
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
                         {sheet && sheet.needLabels.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {sheet.needLabels.map((label) => (
@@ -232,26 +243,28 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
                         ) : (
                           <span className="text-muted">-</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-right">
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setOpen(entry)}
-                          className="rounded-control px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-subtle"
+                          className="text-primary hover:bg-primary-subtle hover:text-primary"
                         >
                           {canRecord
                             ? started
                               ? "Edit"
                               : "Fill in"
                             : "View"}
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
@@ -282,21 +295,23 @@ export function DailyProgressClient({ canRecord }: { canRecord: boolean }) {
 
 function Tile({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-card border border-border bg-surface px-4 py-3 shadow-card">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-bold text-foreground">{value}</div>
-    </div>
+    <Card className="card-soft">
+      <CardContent className="px-4 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-1 font-display text-2xl font-bold text-foreground">{value}</div>
+      </CardContent>
+    </Card>
   );
 }
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <tr>
-      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

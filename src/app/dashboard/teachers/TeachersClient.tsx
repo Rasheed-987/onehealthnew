@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Mail, Pencil, Phone, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
+import { Notice } from "@/components/dashboard/Notice";
+import { Pagination } from "@/components/dashboard/Pagination";
+import { SearchInput } from "@/components/dashboard/SearchInput";
 import { TeacherForm } from "./TeacherForm";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -88,12 +92,12 @@ export function TeachersClient() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      // The 409 for "still assigned to a classroom" names the rooms; show them
+      // The 409 for "still assigned to a classroom" names the classrooms; show them
       // rather than a bare failure.
-      const rooms = payload.details?.classrooms as string[] | undefined;
+      const classrooms = payload.details?.classrooms as string[] | undefined;
       setNotice(
-        rooms?.length
-          ? `${payload.error} (${rooms.join(", ")})`
+        classrooms?.length
+          ? `${payload.error} (${classrooms.join(", ")})`
           : (payload.error ?? "Could not delete teacher."),
       );
     } else {
@@ -105,214 +109,202 @@ export function TeachersClient() {
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-56 flex-1">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
-          />
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by name, email or employee ID"
-            aria-label="Search teachers"
-            className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-          />
-        </div>
-        <button
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <SearchInput
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search teachers by name, email or ID..."
+          aria-label="Search teachers"
+        />
+        <Button
           type="button"
           onClick={() => {
             setEditing(null);
             setFormOpen(true);
           }}
-          className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
         >
           <Plus size={16} />
           Add Teacher
-        </button>
+        </Button>
       </div>
 
       {warning && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
-          <span>{warning}</span>
-          <button type="button" onClick={() => setWarning(null)} aria-label="Dismiss">
-            <X size={16} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={() => setWarning(null)}>
+          {warning}
+        </Notice>
       )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            aria-label="Dismiss"
-          >
-            <X size={16} />
-          </button>
+      {/* Modern Teacher Cards Grid */}
+      {isPending ? (
+        <div className="py-12 text-center text-xs font-semibold text-subtle">
+          Loading teachers...
         </div>
-      )}
+      ) : loadError ? (
+        <div className="py-12 text-center text-xs font-bold text-danger">
+          {loadError}
+        </div>
+      ) : teachers.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border-strong bg-surface p-12 text-center">
+          <p className="text-sm font-bold text-foreground">No teachers found</p>
+          <p className="mt-1 text-xs text-subtle">
+            {search
+              ? `No teachers match "${search}".`
+              : "No teachers yet. Add the first one."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {teachers.map((teacher, index) => {
+            const avatarColors = [
+              "bg-primary/10 text-primary",
+              "bg-crayon-blue/10 text-crayon-blue",
+              "bg-crayon-purple/10 text-crayon-purple",
+              "bg-warning/10 text-warning",
+            ];
+            const colorClass = avatarColors[index % avatarColors.length];
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-semibold">Teacher</th>
-                <th className="px-4 py-3 font-semibold">Contact</th>
-                <th className="px-4 py-3 font-semibold">Employee ID</th>
-                <th className="px-4 py-3 font-semibold">Classrooms</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isPending ? (
-                <EmptyRow>Loading teachers...</EmptyRow>
-              ) : loadError ? (
-                <EmptyRow tone="danger">{loadError}</EmptyRow>
-              ) : teachers.length === 0 ? (
-                <EmptyRow>
-                  {search
-                    ? `No teachers match "${search}".`
-                    : "No teachers yet. Add the first one."}
-                </EmptyRow>
-              ) : (
-                teachers.map((teacher) => (
-                  <tr
-                    key={teacher.id}
-                    className="border-t border-border transition-colors hover:bg-surface-hover"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">
-                        {teacher.displayName}
+            return (
+              <div
+                key={teacher.id}
+                className="group flex flex-col justify-between rounded-2xl border border-border bg-surface p-5 shadow-xs transition-all hover:-translate-y-0.5 hover:shadow-card"
+              >
+                <div>
+                  {/* Top info and status */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-bold text-sm ${colorClass}`}>
+                        {teacher.displayName.charAt(0)}
                       </div>
-                      {teacher.specialization && (
-                        <div className="text-xs text-muted">
-                          {teacher.specialization}
-                        </div>
-                      )}
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {!teacher.isActive && (
-                          <Badge tone="neutral">Inactive</Badge>
-                        )}
-                        {teacher.status === USER_STATUS.INVITED && (
-                          <Badge tone="warning">Invitation pending</Badge>
-                        )}
+                      <div>
+                        <h3 className="text-sm font-extrabold text-foreground leading-snug">
+                          {teacher.displayName}
+                        </h3>
+                        <p className="text-[11px] font-bold text-subtle mt-0.5">
+                          {teacher.specialization ?? "Early Ed Faculty"}
+                        </p>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-foreground">{teacher.email}</div>
-                      {teacher.phone && (
-                        <div className="text-xs text-muted">
-                          {teacher.phone}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
-                      {teacher.employeeId ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {teacher.classrooms.length === 0 ? (
-                        <span className="text-muted">-</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {teacher.classrooms.map((room) => (
-                            <Badge
-                              key={room.id}
-                              tone={
-                                room.role === "LEAD" ? "success" : "neutral"
-                              }
-                            >
-                              {room.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        tone={
-                          STATUS_TONE[
-                            teacher.status as keyof typeof STATUS_TONE
-                          ] ?? "neutral"
-                        }
-                      >
-                        {STATUS_LABEL[
-                          teacher.status as keyof typeof STATUS_LABEL
-                        ] ?? teacher.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditing(teacher);
-                            setFormOpen(true);
-                          }}
-                          aria-label={`Edit ${teacher.displayName}`}
-                          className="rounded-control p-2 text-warning transition-colors hover:bg-warning/10"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setResending(teacher)}
-                          aria-label={`Send an email to ${teacher.displayName}`}
-                          title={
-                            teacher.status === USER_STATUS.INVITED
-                              ? "Resend invitation"
-                              : "Send password reset"
+                    </div>
+
+                    <div className="flex flex-col gap-1 items-end">
+                      {teacher.status && (
+                        <Badge
+                          tone={
+                            STATUS_TONE[
+                              teacher.status as keyof typeof STATUS_TONE
+                            ] ?? "neutral"
                           }
-                          className="rounded-control p-2 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
                         >
-                          <Mail size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleting(teacher)}
-                          aria-label={`Delete ${teacher.displayName}`}
-                          className="rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                          {STATUS_LABEL[
+                            teacher.status as keyof typeof STATUS_LABEL
+                          ] ?? teacher.status}
+                        </Badge>
+                      )}
+                      {teacher.employeeId && (
+                        <span className="text-[10px] font-extrabold text-muted tracking-wider uppercase bg-surface-muted border border-border rounded-md px-1.5 py-0.5 mt-1">
+                          ID: {teacher.employeeId}
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-        {pagination.total > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-muted">
-            <span>
-              {(pagination.page - 1) * pagination.perPage + 1}-
-              {Math.min(pagination.page * pagination.perPage, pagination.total)}{" "}
-              of {pagination.total}
-            </span>
-            <div className="flex gap-2">
-              <PageButton
-                disabled={pagination.page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </PageButton>
-              <PageButton
-                disabled={pagination.page >= pagination.pageCount}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </PageButton>
-            </div>
-          </div>
-        )}
+                  {/* Contact details */}
+                  <div className="mt-5 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-muted">
+                      <Mail size={14} className="text-subtle" />
+                      <span className="truncate">{teacher.email}</span>
+                    </div>
+                    {teacher.phone && (
+                      <div className="flex items-center gap-2 text-xs text-muted">
+                        <Phone size={14} className="text-subtle" />
+                        <span>{teacher.phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Classrooms List */}
+                  <div className="mt-5 pt-4 border-t border-surface-muted">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-subtle block mb-2">
+                      Classroom Assignments
+                    </span>
+
+                    {teacher.classrooms.length === 0 ? (
+                      <span className="text-xs text-subtle italic">No classrooms assigned</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {teacher.classrooms.map((room) => (
+                          <span
+                            key={room.id}
+                            className={`rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${
+                              room.role === "LEAD"
+                                ? "bg-success-subtle text-primary"
+                                : "bg-surface-muted border border-border text-muted"
+                            }`}
+                          >
+                            {room.name} {room.role === "LEAD" ? " (Lead)" : " (Assist)"}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Action buttons */}
+                <div className="mt-6 pt-4 border-t border-border flex items-center justify-between gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setResending(teacher)}
+                    className="flex-1"
+                  >
+                    <Mail size={14} className="text-subtle" />
+                    <span>
+                      {teacher.status === USER_STATUS.INVITED
+                        ? "Resend Invite"
+                        : "Reset Access"}
+                    </span>
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditing(teacher);
+                        setFormOpen(true);
+                      }}
+                      title="Edit Profile"
+                      aria-label={`Edit ${teacher.displayName}`}
+                      className="text-subtle"
+                    >
+                      <Pencil size={15} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeleting(teacher)}
+                      title="Delete Teacher"
+                      aria-label={`Delete ${teacher.displayName}`}
+                      className="text-subtle hover:bg-danger-subtle hover:text-danger"
+                    >
+                      <Trash2 size={15} />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-6">
+        <Pagination pagination={pagination} onPageChange={setPage} />
       </div>
 
       <TeacherForm
@@ -325,9 +317,11 @@ export function TeachersClient() {
         onSaved={afterSave}
       />
 
-      <Modal
+      <ConfirmDialog
         open={resending !== null}
         onClose={() => setResending(null)}
+        onConfirm={confirmResend}
+        confirmLabel="Send email"
         title={
           resending?.status === USER_STATUS.INVITED
             ? "Resend invitation"
@@ -335,107 +329,32 @@ export function TeachersClient() {
         }
         description="Emails a fresh single-use link."
       >
-        <div className="px-6 py-5 text-sm text-foreground">
-          {resending?.status === USER_STATUS.INVITED ? (
-            <>
-              Send a new invitation to <strong>{resending?.email}</strong>? Any
-              previous invitation link stops working.
-            </>
-          ) : (
-            <>
-              Email a password reset link to <strong>{resending?.email}</strong>
-              ? Their current password keeps working until they use it.
-            </>
-          )}
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setResending(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirmResend}
-            className="rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
-            Send email
-          </button>
-        </div>
-      </Modal>
+        {resending?.status === USER_STATUS.INVITED ? (
+          <>
+            Send a new invitation to <strong>{resending?.email}</strong>? Any
+            previous invitation link stops working.
+          </>
+        ) : (
+          <>
+            Email a password reset link to <strong>{resending?.email}</strong>?
+            Their current password keeps working until they use it.
+          </>
+        )}
+      </ConfirmDialog>
 
-      <Modal
+      <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+        confirmLabel="Delete"
+        destructive
         title="Delete teacher"
         description="This removes the staff profile and the sign-in account."
       >
-        <div className="px-6 py-5 text-sm text-foreground">
-          Delete <strong>{deleting?.displayName}</strong>? This cannot be
-          undone. To keep the record but block sign-in, edit the teacher and
-          untick &ldquo;Active&rdquo; instead.
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setDeleting(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={confirmDelete}
-            className="rounded-control bg-danger px-4 py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
-          >
-            Delete
-          </button>
-        </div>
-      </Modal>
+        Delete <strong>{deleting?.displayName}</strong>? This cannot be undone.
+        To keep the record but block sign-in, edit the teacher and untick
+        &ldquo;Active&rdquo; instead.
+      </ConfirmDialog>
     </>
-  );
-}
-
-function EmptyRow({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "danger";
-}) {
-  return (
-    <tr>
-      <td
-        colSpan={6}
-        className={`px-4 py-10 text-center text-sm ${
-          tone === "danger" ? "text-danger" : "text-muted"
-        }`}
-      >
-        {children}
-      </td>
-    </tr>
-  );
-}
-
-function PageButton({
-  children,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }

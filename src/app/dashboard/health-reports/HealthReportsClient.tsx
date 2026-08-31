@@ -1,10 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HeartPulse, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { HeartPulse, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
-import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/dashboard/ConfirmDialog";
+import { Notice } from "@/components/dashboard/Notice";
+import { SearchInput } from "@/components/dashboard/SearchInput";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   queryKeys,
@@ -45,6 +65,8 @@ const EMPTY_SUMMARY: VisitSummary = {
   sentHome: 0,
   escalated: 0,
 };
+
+const ALL = "__all__";
 
 export function HealthReportsClient({
   canRecord,
@@ -136,95 +158,80 @@ export function HealthReportsClient({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search a child"
-            aria-label="Search a child"
-            className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
-          />
-        </div>
+        <SearchInput
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search a child"
+          aria-label="Search a child"
+          className="min-w-[200px]"
+        />
 
         {classrooms.length > 0 && (
-          <select
-            value={classroom}
-            onChange={(event) => setClassroom(event.target.value)}
-            aria-label="Classroom"
-            className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          <Select
+            value={classroom || ALL}
+            onValueChange={(value) => setClassroom(value === ALL ? "" : value)}
           >
-            <option value="">All classrooms</option>
-            {classrooms.map((room) => (
-              <option key={room.id} value={room.id}>
-                {room.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-auto" aria-label="Classroom">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All classrooms</SelectItem>
+              {classrooms.map((room) => (
+                <SelectItem key={room.id} value={room.id}>
+                  {room.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
 
-        <select
-          value={outcome}
-          onChange={(event) => setOutcome(event.target.value)}
-          aria-label="Outcome"
-          className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+        <Select
+          value={outcome || ALL}
+          onValueChange={(value) => setOutcome(value === ALL ? "" : value)}
         >
-          <option value="">All outcomes</option>
-          {Object.values(VISIT_OUTCOME).map((value) => (
-            <option key={value} value={value}>
-              {VISIT_OUTCOME_LABEL[value]}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-auto" aria-label="Outcome">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All outcomes</SelectItem>
+            {Object.values(VISIT_OUTCOME).map((value) => (
+              <SelectItem key={value} value={value}>
+                {VISIT_OUTCOME_LABEL[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <input
+        <Input
           type="date"
           value={from}
           onChange={(event) => setFrom(event.target.value)}
           aria-label="From"
-          className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          className="w-auto"
         />
-        <input
+        <Input
           type="date"
           value={to}
           onChange={(event) => setTo(event.target.value)}
           aria-label="To"
-          className="rounded-control border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
+          className="w-auto"
         />
 
         {canRecord && (
-          <button
-            type="button"
-            onClick={() => setRecording(true)}
-            className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
+          <Button type="button" onClick={() => setRecording(true)}>
             <Plus size={16} />
             Record a visit
-          </button>
+          </Button>
         )}
       </div>
 
       {loadError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-danger/25 bg-danger-subtle px-3 py-2 text-sm text-danger">
-          <span>{loadError}</span>
-          <button type="button" onClick={dismissError} aria-label="Dismiss">
-            <X size={14} />
-          </button>
-        </div>
+        <Notice tone="danger" onDismiss={dismissError}>
+          {loadError}
+        </Notice>
       )}
-
-      {notice && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-control border border-primary/25 bg-primary-subtle px-3 py-2 text-sm text-primary-active">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {notice && <Notice onDismiss={() => setNotice(null)}>{notice}</Notice>}
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="Visits" value={summary.total} />
@@ -233,20 +240,20 @@ export function HealthReportsClient({
         <Tile label="Clinic or hospital" value={summary.escalated} />
       </div>
 
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-surface-muted">
-              <tr className="text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-3 font-semibold">Child</th>
-                <th className="px-4 py-3 font-semibold">Seen</th>
-                <th className="px-4 py-3 font-semibold">Symptoms</th>
-                <th className="px-4 py-3 font-semibold">Care</th>
-                <th className="px-4 py-3 font-semibold">Outcome</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow className="bg-surface-muted text-xs uppercase tracking-wide text-muted hover:bg-surface-muted">
+                <TableHead className="px-4 py-3 font-semibold">Child</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Seen</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Symptoms</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Care</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Outcome</TableHead>
+                <TableHead className="px-4 py-3 font-semibold">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isPending ? (
                 <EmptyRow>Loading the health records...</EmptyRow>
               ) : shown.length === 0 ? (
@@ -259,11 +266,8 @@ export function HealthReportsClient({
                 </EmptyRow>
               ) : (
                 shown.map((visit) => (
-                  <tr
-                    key={visit.id}
-                    className="border-t border-border transition-colors hover:bg-surface-hover"
-                  >
-                    <td className="px-4 py-3">
+                  <TableRow key={visit.id}>
+                    <TableCell className="px-4 py-3">
                       <button
                         type="button"
                         onClick={() => setViewingStudent(visit.student)}
@@ -279,58 +283,64 @@ export function HealthReportsClient({
                           <Badge tone="warning">Medical note</Badge>
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-muted">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted">
                       {formatVisitedAt(visit.visitedAt)}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <LabelList labels={symptomLabels(visit)} />
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <LabelList labels={visit.nursingCareLabels} />
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <Badge tone={OUTCOME_TONE[visit.outcome]}>
                         {visit.outcomeLabel}
                       </Badge>
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => setViewingStudent(visit.student)}
                           aria-label={`Health record for ${visit.student.fullName}`}
-                          className="rounded-control p-2 text-primary transition-colors hover:bg-primary-subtle"
+                          className="text-primary hover:bg-primary-subtle hover:text-primary"
                         >
                           <HeartPulse size={16} />
-                        </button>
+                        </Button>
                         {canRecord && (
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setEditing(visit)}
                             aria-label="Edit visit"
-                            className="rounded-control p-2 text-warning transition-colors hover:bg-warning/10"
+                            className="text-warning hover:bg-warning/10 hover:text-warning"
                           >
                             <Pencil size={16} />
-                          </button>
+                          </Button>
                         )}
                         {canDelete && (
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setDeleting(visit)}
                             aria-label="Remove visit"
-                            className="rounded-control p-2 text-danger transition-colors hover:bg-danger-subtle"
+                            className="text-danger hover:bg-danger-subtle hover:text-danger"
                           >
                             <Trash2 size={16} />
-                          </button>
+                          </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
@@ -359,37 +369,22 @@ export function HealthReportsClient({
         />
       )}
 
-      <Modal
+      <ConfirmDialog
         open={deleting !== null}
         title="Remove this visit?"
         description="The clinical record is deleted for good. This cannot be undone."
         onClose={() => setDeleting(null)}
+        onConfirm={() => void confirmDelete()}
+        confirmLabel="Remove visit"
+        destructive
       >
-        <div className="px-6 py-5 text-sm text-muted">
-          {deleting && (
-            <p>
-              {deleting.student.fullName}, seen{" "}
-              {formatVisitedAt(deleting.visitedAt)} - {deleting.outcomeLabel}.
-            </p>
-          )}
-        </div>
-        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => setDeleting(null)}
-            className="rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void confirmDelete()}
-            className="rounded-control bg-danger px-4 py-2 text-sm font-semibold text-danger-foreground transition-colors hover:bg-danger-hover"
-          >
-            Remove visit
-          </button>
-        </div>
-      </Modal>
+        {deleting && (
+          <p>
+            {deleting.student.fullName}, seen{" "}
+            {formatVisitedAt(deleting.visitedAt)} - {deleting.outcomeLabel}.
+          </p>
+        )}
+      </ConfirmDialog>
     </>
   );
 }
@@ -430,23 +425,25 @@ function LabelList({ labels }: { labels: string[] }) {
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <tr>
-      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted">
+    <TableRow className="hover:bg-transparent">
+      <TableCell colSpan={6} className="px-4 py-10 text-center text-sm text-muted">
         {children}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 function Tile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-card border border-border bg-surface p-4 shadow-card">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-        {label}
-      </p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-        {value}
-      </p>
-    </div>
+    <Card className="card-soft">
+      <CardContent className="p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground">
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   );
 }

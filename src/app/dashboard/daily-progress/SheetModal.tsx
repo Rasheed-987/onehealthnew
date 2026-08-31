@@ -4,6 +4,13 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { DailyProgressRow } from "@/lib/dailyProgress";
 import {
   MOOD,
@@ -246,26 +253,32 @@ export function SheetModal({
                       )
                     }
                   />
-                  <select
+                  <Select
                     value={row.type}
-                    aria-label={`Change ${i + 1} type`}
-                    onChange={(e) =>
+                    onValueChange={(val) =>
                       setToilet(
                         toilet.map((t, x) =>
                           x === i
-                            ? { ...t, type: e.target.value as ToiletType }
+                            ? { ...t, type: val as ToiletType }
                             : t,
                         ),
                       )
                     }
-                    className={inputClass}
                   >
-                    {Object.values(TOILET_TYPE).map((v) => (
-                      <option key={v} value={v}>
-                        {TOILET_TYPE_LABEL[v]}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      aria-label={`Change ${i + 1} type`}
+                      className={`${inputClass} w-32`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(TOILET_TYPE).map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {TOILET_TYPE_LABEL[v]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </>
               )}
             />

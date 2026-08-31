@@ -346,7 +346,7 @@ function AudienceOption({
         name="audience"
         checked={checked}
         onChange={onSelect}
-        className="mt-1 accent-[var(--color-primary,#2f7d4f)]"
+        className="mt-1 accent-primary"
       />
       <span>
         <span className="block text-sm font-medium text-foreground">
