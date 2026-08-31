@@ -33,6 +33,16 @@ export interface IStudent {
    * student is old enough to have an account.
    */
   user?: Types.ObjectId | null;
+  /**
+   * The school's own admission number, typed in by staff. Optional, because
+   * every child enrolled before this field existed has none and a blank must
+   * stay saveable - see the partial index below.
+   *
+   * This is the value a guardian types into the app to ask to be linked to
+   * their child, so it is the one field here a parent ever sees before they
+   * have access to anything.
+   */
+  studentId?: string;
   firstName: string;
   lastName: string;
   dateOfBirth: Date;
@@ -75,7 +85,13 @@ const StudentSchema = new Schema<IStudent>(
       // Uniqueness is enforced by the partial index below, NOT here - see the
       // note on that index for why `sparse` was wrong.
     },
-
+    studentId: {
+      type: String,
+      trim: true,
+      // Uniqueness is enforced by the partial index below, for the same reason
+      // as `user` - and no `index: true` here, or Mongoose warns about a
+      // duplicate schema index on the same key.
+    },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     dateOfBirth: {
@@ -128,9 +144,24 @@ StudentSchema.virtual("age").get(function (this: IStudent) {
 });
 
 /**
- * The two guardian invariants, neither of which an index can express: MongoDB
- * cannot enforce uniqueness *within* an array, and it cannot require an array
- * to be non-empty. Mongoose 9 pre-hooks are async and take no `next` callback.
+ * The guardian invariant an index cannot express: MongoDB has no way to enforce
+ * uniqueness *within* an array. Mongoose 9 pre-hooks are async and take no
+ * `next` callback.
+ *
+ * This hook used to carry a second rule - that the list could never be empty -
+ * on the reasoning that a child with no guardian is unreachable. That was right
+ * while staff typing a guardian in was the only way one could ever be attached.
+ *
+ * Guardians now register themselves in the app against a student ID, which
+ * requires the child's record to exist FIRST, with nobody on it. An empty list
+ * is therefore a normal, expected, temporary state rather than a broken record,
+ * and refusing to save one made the enrolment sheet unusable for the very flow
+ * the student ID exists to serve. The red "No guardian" flag on the students
+ * table is what carries the old rule's intent now: still visible, no longer
+ * fatal.
+ *
+ * The cost, accepted deliberately: removing a child's last guardian is now
+ * possible, and cuts that family off until somebody re-links them.
  */
 StudentSchema.pre("validate", async function () {
   const guardianIds = this.guardians.map((g) => String(g.parent));
@@ -140,19 +171,6 @@ StudentSchema.pre("validate", async function () {
       "guardians",
       "The same parent cannot be linked to a student twice.",
     );
-  }
-
-  /*
-   * A child with no guardian is unreachable: nobody can be told about them,
-   * and nobody can read their sheets. Only enforced when the list is actually
-   * being written, so a legacy row that predates this rule stays repairable -
-   * rejecting every save of it would leave the only fix as a manual DB edit.
-   */
-  if (
-    (this.isNew || this.isModified("guardians")) &&
-    this.guardians.length === 0
-  ) {
-    this.invalidate("guardians", "A student needs at least one guardian.");
   }
 });
 
@@ -174,6 +192,25 @@ StudentSchema.index(
     unique: true,
     partialFilterExpression: { user: { $type: "objectId" } },
     name: "user_when_present",
+  },
+);
+
+/**
+ * Admission numbers are unique - among the students that have one.
+ *
+ * Partial rather than sparse for the same reason as the index above, and the
+ * distinction bites harder here: a guardian types this number to claim a child,
+ * so two children sharing one would hand a stranger somebody else's record.
+ * Most existing rows have no number at all and must stay saveable, which is
+ * exactly what `$type: "string"` buys - a missing field is not indexed, so any
+ * number of children without an admission number coexist.
+ */
+StudentSchema.index(
+  { studentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { studentId: { $type: "string" } },
+    name: "studentId_when_present",
   },
 );
 

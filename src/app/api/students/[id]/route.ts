@@ -82,6 +82,15 @@ export async function PATCH(
     if (input.nationality !== undefined) {
       student.nationality = input.nationality || undefined;
     }
+    /*
+     * Clearing has to REMOVE the path, not store "": the unique index is keyed
+     * on `studentId` being a string, so a second child cleared to an empty
+     * string would collide with the first. `|| undefined` is what makes a blank
+     * disappear from the index entirely.
+     */
+    if (input.studentId !== undefined) {
+      student.studentId = input.studentId || undefined;
+    }
     if (input.medicalNotes !== undefined) {
       student.medicalNotes = input.medicalNotes || undefined;
     }

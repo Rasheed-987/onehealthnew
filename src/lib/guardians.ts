@@ -57,10 +57,16 @@ export interface NewParentInput {
  *
  * The password is a placeholder the guardian never learns and cannot use. The
  * account stays INVITED until they redeem the emailed link and choose their own.
+ * That holds for a guardian who registers themselves in the app too: they type a
+ * password on the form, but it is not stored until they have proved the mailbox
+ * with a code, so the placeholder is what sits here in the meantime.
+ *
+ * `createdBy` is null for exactly that case - nobody at the school created the
+ * account, the family did.
  */
 export async function createParentAccount(
   input: NewParentInput,
-  createdBy: string,
+  createdBy: string | null,
   dbSession: mongoose.ClientSession,
 ): Promise<CreatedGuardianAccount> {
   const [user] = await User.create(

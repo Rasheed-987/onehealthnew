@@ -107,6 +107,13 @@ function duplicateKeyResponse(
   if (field === "role") {
     return fail(409, "A super admin already exists.");
   }
+  // "That studentId is already taken" reads like a system field. Staff know it
+  // as the admission number, and the message has to name the box they typed in.
+  if (field === "studentId") {
+    return fail(409, "Another child already has that student ID.", {
+      studentId: "This student ID is already in use.",
+    });
+  }
   const label = field ?? "value";
   return fail(409, `That ${label} is already taken.`, {
     [label]: `This ${label} is already registered.`,

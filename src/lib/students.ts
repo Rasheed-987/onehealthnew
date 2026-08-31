@@ -79,19 +79,21 @@ const guardiansField = z
     return new Set(keys).size === keys.length;
   }, "The same guardian cannot be listed twice.");
 
-/**
- * Creation only. A child with no guardian is unreachable, so the enrolment
- * sheet cannot submit one - the model enforces the same rule, this is here so
- * the form gets a field-level message rather than a schema error.
+/*
+ * Guardians used to be required on creation, on the reasoning that a child with
+ * nobody attached is unreachable. That was true when staff typing them in was
+ * the only way a guardian could ever be linked.
  *
- * `UpdateStudentSchema` deliberately keeps the permissive version: a row that
- * predates the rule has to stay editable, or the only way to give it a guardian
- * is a manual database write.
+ * It stopped being true when guardians gained the ability to register in the
+ * app against a student ID: the school enrols the child, hands the family the
+ * ID, and the family attaches themselves. Every enrolment on that path starts
+ * with an empty list by design, so demanding one here would have forced staff
+ * to invent a placeholder guardian purely to get past the form.
+ *
+ * The concern behind the old rule has not gone away - it is now carried by the
+ * red "No guardian" flag on the students table, which turns a hard block into a
+ * visible piece of outstanding work.
  */
-const requiredGuardiansField = guardiansField.refine(
-  (list) => list.length > 0,
-  "Add at least one guardian.",
-);
 
 /** "2022-04-01". Rejected if it is not a real date, or is in the future. */
 const dateOfBirth = z
@@ -108,10 +110,16 @@ export const CreateStudentSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required."),
   lastName: z.string().trim().min(1, "Last name is required."),
   dateOfBirth,
+  /**
+   * The school's admission number. Optional here even though it is unique,
+   * because most children already on the system have none and the enrolment
+   * sheet must not start demanding one retrospectively.
+   */
+  studentId: optionalText,
   gender: z.enum(GENDER),
   nationality: optionalText,
   medicalNotes: optionalText,
-  guardians: requiredGuardiansField,
+  guardians: guardiansField,
 });
 export type CreateStudentInput = z.infer<typeof CreateStudentSchema>;
 
@@ -119,6 +127,7 @@ export const UpdateStudentSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required.").optional(),
   lastName: z.string().trim().min(1, "Last name is required.").optional(),
   dateOfBirth: dateOfBirth.optional(),
+  studentId: clearableText,
   gender: z.enum(GENDER).optional(),
   nationality: clearableText,
   medicalNotes: clearableText,
@@ -140,6 +149,8 @@ export interface StudentRow {
   firstName: string;
   lastName: string;
   fullName: string;
+  /** The admission number staff read out to a guardian. Null if never set. */
+  studentId: string | null;
   dateOfBirth: string;
   age: number;
   gender: string;
@@ -189,6 +200,7 @@ export function toStudentRow(
     firstName: student.firstName,
     lastName: student.lastName,
     fullName: `${student.firstName} ${student.lastName}`.trim(),
+    studentId: student.studentId ?? null,
     dateOfBirth: student.dateOfBirth.toISOString(),
     age: ageFrom(student.dateOfBirth),
     gender: student.gender,

@@ -90,6 +90,23 @@ export const PERMISSIONS = {
   // row-level half is the `submittedBy` filter in `resolveFeedbackScope`.
   "feedback:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.PARENT],
   "feedback:delete": [USER_ROLE.SUPER_ADMIN],
+
+  /*
+   * Guardians asking to be linked to a child they named by student ID.
+   *
+   * Staff, not admin-only, and that is a departure from `parent:*` above worth
+   * justifying: this queue is people locked out of their own child's records
+   * while they wait, and routing every one of them through a single super admin
+   * is what would make the wait long. The teacher who knows the family is also
+   * the person best placed to spot a name that does not belong.
+   *
+   * Approving writes a guardian row onto a student, which staff can already do
+   * directly through `student:update` - so this grants no reach they lacked.
+   */
+  "guardianLink:list": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
+  "guardianLink:decide": [USER_ROLE.SUPER_ADMIN, USER_ROLE.TEACHER],
+  /** Filing one. Guardians only - staff link a family directly instead. */
+  "guardianLink:create": [USER_ROLE.PARENT],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

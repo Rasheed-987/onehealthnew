@@ -38,6 +38,11 @@ export {
 export { Message, type IMessage } from "./Message";
 export { Feedback, type IFeedback } from "./Feedback";
 export {
+  GuardianLinkRequest,
+  type IGuardianLinkRequest,
+} from "./GuardianLinkRequest";
+export { RateLimit, type IRateLimit } from "./RateLimit";
+export {
   VerificationToken,
   TOKEN_TYPE,
   type IVerificationToken,

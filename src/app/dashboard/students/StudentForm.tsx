@@ -117,6 +117,7 @@ export function StudentForm({
       firstName: text("firstName"),
       lastName: text("lastName"),
       dateOfBirth: text("dateOfBirth"),
+      studentId: text("studentId"),
       gender: text("gender"),
       nationality: text("nationality"),
       medicalNotes: text("medicalNotes"),
@@ -228,12 +229,22 @@ export function StudentForm({
             />
           </div>
 
-          <TextField
-            label="Nationality"
-            name="nationality"
-            defaultValue={student?.nationality ?? ""}
-            error={fieldErrors.nationality}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Student ID"
+              name="studentId"
+              placeholder="The school's admission number"
+              defaultValue={student?.studentId ?? ""}
+              hint="A guardian types this into the app to ask for access to this child."
+              error={fieldErrors.studentId}
+            />
+            <TextField
+              label="Nationality"
+              name="nationality"
+              defaultValue={student?.nationality ?? ""}
+              error={fieldErrors.nationality}
+            />
+          </div>
 
           <TextField
             label="Medical notes"
@@ -245,7 +256,8 @@ export function StudentForm({
 
           <fieldset className="rounded-control border border-border p-4">
             <legend className="px-1 text-sm font-medium text-foreground">
-              Guardians
+              Guardians{" "}
+              <span className="font-normal text-muted">(optional)</span>
             </legend>
 
             {fieldErrors.guardians && (
@@ -254,10 +266,16 @@ export function StudentForm({
               </p>
             )}
 
+            {/* Two ways to attach a family, and the second one is why this is
+                no longer required: the child's record has to exist before a
+                guardian can register against its student ID. */}
             {guardians.length === 0 && (
               <p className="mb-3 text-sm text-muted">
-                Every child needs at least one guardian &mdash; search for them
-                below, or add someone new.
+                Add the family now &mdash; search below, or add someone new. Or
+                leave this empty, give them the student ID above, and approve
+                them under Link Requests when they register in the app. The
+                child will show as &ldquo;No guardian&rdquo; until one of those
+                happens.
               </p>
             )}
 

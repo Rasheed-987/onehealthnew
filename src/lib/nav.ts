@@ -12,6 +12,7 @@ import {
   UserPlus,
   User,
   UserCheck,
+  UserRoundCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,6 +96,17 @@ export const NAV_SECTIONS: readonly NavSection[] = [
         href: "/dashboard/parents",
         icon: UserPlus,
         roles: ADMIN_ONLY,
+      },
+      /*
+       * Staff, not ADMIN_ONLY like the rest of this section: every row here is
+       * a family locked out of their own child's records until somebody looks,
+       * and a queue only one person can clear is a queue that sits.
+       */
+      {
+        label: "Link Requests",
+        href: "/dashboard/link-requests",
+        icon: UserRoundCheck,
+        roles: STAFF,
       },
     ],
   },

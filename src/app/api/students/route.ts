@@ -77,7 +77,13 @@ export async function GET(request: Request) {
     if (status) filter.isActive = status === "active";
     if (search) {
       const pattern = new RegExp(escapeRegex(search), "i");
-      filter.$or = [{ firstName: pattern }, { lastName: pattern }];
+      // Admission number included because it is what a guardian quotes on the
+      // telephone, and what a link request shows staff before they approve it.
+      filter.$or = [
+        { firstName: pattern },
+        { lastName: pattern },
+        { studentId: pattern },
+      ];
     }
 
     const [students, total] = await Promise.all([
@@ -135,6 +141,7 @@ export async function POST(request: Request) {
             {
               firstName: input.firstName,
               lastName: input.lastName,
+              studentId: input.studentId,
               dateOfBirth: new Date(input.dateOfBirth),
               gender: input.gender,
               nationality: input.nationality,

@@ -110,7 +110,7 @@ export function StudentsClient({
               setSearch(event.target.value);
               setPage(1);
             }}
-            placeholder="Search by name"
+            placeholder="Search by name or student ID"
             aria-label="Search students"
             className="w-full rounded-control border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/25"
           />
@@ -183,6 +183,13 @@ export function StudentsClient({
                       <div className="font-medium text-foreground">
                         {student.fullName}
                       </div>
+                      {/* Monospaced: this is the string staff read out to a
+                          guardian over the phone, digit by digit. */}
+                      {student.studentId && (
+                        <div className="font-mono text-xs text-muted">
+                          {student.studentId}
+                        </div>
+                      )}
                       <div className="text-xs text-muted">
                         {student.nationality ?? ""}
                       </div>

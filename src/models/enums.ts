@@ -125,6 +125,33 @@ export const ENROLLMENT_STATUS = {
 export type EnrollmentStatus =
   (typeof ENROLLMENT_STATUS)[keyof typeof ENROLLMENT_STATUS];
 
+/**
+ * A guardian's request to be linked to a child they named by student ID.
+ *
+ * Filed by the parent from the app, decided by staff. Terminal rows are kept
+ * rather than deleted for the same reason enrolments are: "who asked for access
+ * to this child, and who let them in" is a question the school will be asked,
+ * and a deleted row cannot answer it.
+ *
+ * CANCELLED is the parent withdrawing their own request; REJECTED is the school
+ * refusing it. Distinct because only one of the two is a safeguarding signal.
+ */
+export const GUARDIAN_LINK_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+} as const;
+export type GuardianLinkStatus =
+  (typeof GUARDIAN_LINK_STATUS)[keyof typeof GUARDIAN_LINK_STATUS];
+
+export const GUARDIAN_LINK_STATUS_LABEL: Record<GuardianLinkStatus, string> = {
+  PENDING: "Awaiting review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  CANCELLED: "Withdrawn",
+};
+
 export const ATTENDANCE_STATUS = {
   PRESENT: "PRESENT",
   ABSENT: "ABSENT",

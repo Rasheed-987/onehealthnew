@@ -19,6 +19,7 @@ import type {
   MessageRow,
   MessageThreadRow,
 } from "@/lib/messages";
+import type { GuardianLinkRequestRow } from "@/lib/guardianLinks";
 import type { ParentRow } from "@/lib/parents";
 import type { StudentRow } from "@/lib/students";
 import type { TeacherRow } from "@/lib/teachers";
@@ -66,6 +67,11 @@ export const queryKeys = {
     list: (search: string, page: number) =>
       ["parents", "list", search, page] as const,
     options: (query: string) => ["parents", "options", query] as const,
+  },
+  guardianLinkRequests: {
+    all: ["guardian-link-requests"] as const,
+    list: (status: string, page: number) =>
+      ["guardian-link-requests", "list", status, page] as const,
   },
   classrooms: {
     all: ["classrooms"] as const,
@@ -260,6 +266,27 @@ export function useParentsQuery(search: string, page: number) {
       fetchJson<{ parents: ParentRow[]; pagination: Pagination }>(
         `/api/parents?${listParams(search, page)}`,
       ),
+    ...KEEP_ROWS,
+  });
+}
+
+/**
+ * The queue of guardians asking to be linked to a child.
+ *
+ * `staleTime: 0` because this is a shared worklist: two members of staff may be
+ * working it at once, and a row that has already been decided somewhere else
+ * should disappear on the next look rather than sit there inviting a second
+ * click. The API refuses the second click anyway - this just spares the error.
+ */
+export function useGuardianLinkRequestsQuery(status: string, page: number) {
+  return useQuery({
+    queryKey: queryKeys.guardianLinkRequests.list(status, page),
+    queryFn: () =>
+      fetchJson<{
+        requests: GuardianLinkRequestRow[];
+        pagination: Pagination;
+      }>(`/api/guardian-link-requests?${filterParams({ status, page: String(page) })}`),
+    staleTime: 0,
     ...KEEP_ROWS,
   });
 }
