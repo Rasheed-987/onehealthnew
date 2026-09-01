@@ -56,14 +56,17 @@ export function AppSidebar({ role }: { role: UserRole }) {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
+      <SidebarHeader className="border-b border-sidebar-border px-3 py-2.5">
         <Link
           href="/dashboard"
           onClick={() => setOpenMobile(false)}
-          className="flex min-w-0 items-center gap-2 px-1 py-2"
+          className="flex min-w-0 items-center gap-2.5 py-0.5"
           aria-label="Letters and Numbers home"
         >
-          <BrandMark showText={!collapsed} className={collapsed ? "h-9 w-9 justify-center" : ""} />
+          <BrandMark
+            showText={!collapsed}
+            className={collapsed ? "h-9 w-9" : "h-11 w-11"}
+          />
         </Link>
       </SidebarHeader>
 
