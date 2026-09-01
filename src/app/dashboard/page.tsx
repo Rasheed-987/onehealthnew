@@ -15,76 +15,76 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { connectDB } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { Classroom, Parent, Student, Teacher } from "@/models";
+import { getDashboardData } from "@/lib/dashboard";
 
 export const metadata: Metadata = {
   title: "Dashboard | Letter & Numbers",
 };
 
+// Circumference of the r=38 progress ring, for the attendance donut.
+const RING_CIRCUMFERENCE = 2 * Math.PI * 38;
+
+const MEAL_BARS = ["bg-primary", "bg-primary", "bg-warning"];
+const CLASS_BARS = ["bg-crayon-green", "bg-crayon-blue", "bg-crayon-purple"];
+
 export default async function DashboardPage() {
   await requireUser();
-  await connectDB();
 
-  // Query live database counts
-  const [studentsCount, teachersCount, parentsCount, classroomsCount] =
-    await Promise.all([
-      Student.estimatedDocumentCount(),
-      Teacher.estimatedDocumentCount(),
-      Parent.estimatedDocumentCount(),
-      Classroom.estimatedDocumentCount(),
-    ]);
+  const data = await getDashboardData();
 
   const stats = [
     {
       title: "Total Students",
-      value: studentsCount > 0 ? studentsCount : 128,
-      trend: "↑ 12 this month",
-      trendColor: "text-success",
+      value: data.stats.students.value,
+      trend: data.stats.students.trend,
+      trendColor: data.stats.students.trendUp ? "text-success" : "text-muted",
       icon: User,
       tone: "text-crayon-teal",
       href: "/dashboard/students",
     },
     {
       title: "Teachers",
-      value: teachersCount > 0 ? teachersCount : 16,
-      trend: "↑ 2 this month",
-      trendColor: "text-success",
+      value: data.stats.teachers.value,
+      trend: data.stats.teachers.trend,
+      trendColor: data.stats.teachers.trendUp ? "text-success" : "text-muted",
       icon: GraduationCap,
       tone: "text-crayon-blue",
       href: "/dashboard/teachers",
     },
     {
       title: "Parents",
-      value: parentsCount > 0 ? parentsCount : 98,
-      trend: "↑ 8 this month",
-      trendColor: "text-success",
+      value: data.stats.parents.value,
+      trend: data.stats.parents.trend,
+      trendColor: data.stats.parents.trendUp ? "text-success" : "text-muted",
       icon: Users,
       tone: "text-crayon-orange",
       href: "/dashboard/parents",
     },
     {
       title: "Classes",
-      value: classroomsCount > 0 ? classroomsCount : 8,
-      trend: "No change",
-      trendColor: "text-muted",
+      value: data.stats.classes.value,
+      trend: data.stats.classes.trend,
+      trendColor: data.stats.classes.trendUp ? "text-success" : "text-muted",
       icon: BookOpen,
       tone: "text-crayon-purple",
       href: "/dashboard/home-rooms",
     },
   ];
 
-  const meals = [
-    { label: "Breakfast", pct: 85, bar: "bg-primary" },
-    { label: "Lunch", pct: 90, bar: "bg-primary" },
-    { label: "Snacks", pct: 80, bar: "bg-warning" },
-  ];
+  const { attendance } = data;
+  const ringOffset = RING_CIRCUMFERENCE * (1 - attendance.pct / 100);
 
-  const topClasses = [
-    { name: "Sunflowers", pct: 75, count: 12, bar: "bg-crayon-green" },
-    { name: "Little Stars", pct: 56, count: 9, bar: "bg-crayon-blue" },
-    { name: "Tiny Tots", pct: 44, count: 7, bar: "bg-crayon-purple" },
+  const meals = data.meals.map((m, i) => ({ ...m, bar: MEAL_BARS[i] ?? "bg-primary" }));
+  const topClasses = data.topClasses.map((c, i) => ({
+    ...c,
+    bar: CLASS_BARS[i] ?? "bg-crayon-green",
+  }));
+
+  const activityIcons = [
+    { icon: Palette, tone: "text-crayon-orange", bg: "bg-crayon-orange/15" },
+    { icon: Trees, tone: "text-crayon-green", bg: "bg-crayon-green/15" },
+    { icon: BookOpen, tone: "text-crayon-purple", bg: "bg-crayon-purple/15" },
   ];
 
   const rangePill = (label: string) => (
@@ -141,22 +141,24 @@ export default async function DashboardPage() {
                     fill="transparent"
                     stroke="var(--color-primary)"
                     strokeWidth="12"
-                    strokeDasharray="238.76"
-                    strokeDashoffset="35.81"
+                    strokeDasharray={RING_CIRCUMFERENCE.toFixed(2)}
+                    strokeDashoffset={ringOffset.toFixed(2)}
                     strokeLinecap="round"
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center text-center">
-                  <span className="font-display text-xl font-bold leading-none">85%</span>
+                  <span className="font-display text-xl font-bold leading-none">
+                    {attendance.pct}%
+                  </span>
                   <span className="text-[11px] font-semibold text-muted">Present</span>
                 </div>
               </div>
 
               <div className="space-y-3">
                 {[
-                  { dot: "bg-primary", label: "Present", value: 109 },
-                  { dot: "bg-danger", label: "Absent", value: 14 },
-                  { dot: "bg-warning", label: "On Leave", value: 5 },
+                  { dot: "bg-primary", label: "Present", value: attendance.present },
+                  { dot: "bg-danger", label: "Absent", value: attendance.absent },
+                  { dot: "bg-warning", label: "On Leave", value: attendance.onLeave },
                 ].map((r) => (
                   <div key={r.label} className="flex items-center gap-3">
                     <span className={`h-3 w-3 rounded-full ${r.dot}`} />
@@ -168,7 +170,10 @@ export default async function DashboardPage() {
             </div>
 
             <div className="border-t border-border pt-2 text-center text-xs font-semibold text-muted">
-              Total Enrolled: <span className="font-bold text-foreground">128 students</span>
+              Total Enrolled:{" "}
+              <span className="font-bold text-foreground">
+                {attendance.enrolled} students
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -179,22 +184,22 @@ export default async function DashboardPage() {
             <h2 className="font-display text-base font-bold">Recent Activities</h2>
 
             <div className="my-4 space-y-3.5">
-              {[
-                { icon: Palette, tone: "text-crayon-orange", bg: "bg-crayon-orange/15", title: "Art & Craft", by: "Sarah Khan", ago: "2h ago" },
-                { icon: Trees, tone: "text-crayon-green", bg: "bg-crayon-green/15", title: "Outdoor Play", by: "Ahmed Ali", ago: "4h ago" },
-                { icon: BookOpen, tone: "text-crayon-purple", bg: "bg-crayon-purple/15", title: "Story Time", by: "Maryam Fatima", ago: "1d ago" },
-              ].map(({ icon: Icon, tone, bg, title, by, ago }) => (
-                <div key={title} className="flex items-center gap-3.5 rounded-xl p-2 transition-colors hover:bg-surface-hover">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg} ${tone}`}>
-                    <Icon size={20} />
+              {data.activities.map((activity, i) => {
+                const { icon: Icon, tone, bg } =
+                  activityIcons[i % activityIcons.length];
+                return (
+                  <div key={`${activity.title}-${i}`} className="flex items-center gap-3.5 rounded-xl p-2 transition-colors hover:bg-surface-hover">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg} ${tone}`}>
+                      <Icon size={20} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-xs font-bold text-foreground">{activity.title}</h4>
+                      <p className="text-[11px] font-medium text-muted">By: {activity.by}</p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-subtle">{activity.ago}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="truncate text-xs font-bold text-foreground">{title}</h4>
-                    <p className="text-[11px] font-medium text-muted">By: {by}</p>
-                  </div>
-                  <span className="text-[11px] font-semibold text-subtle">{ago}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="border-t border-border pt-3">
@@ -218,18 +223,23 @@ export default async function DashboardPage() {
             </div>
 
             <div className="my-4 space-y-4">
-              <div className="space-y-1">
-                <h4 className="text-xs font-bold leading-snug text-foreground">
-                  School will remain closed on 25th May (Holiday)
-                </h4>
-                <p className="text-[11px] font-medium text-muted">May 20, 2024</p>
-              </div>
-              <div className="space-y-1 border-t border-warning/30 pt-2">
-                <h4 className="text-xs font-bold leading-snug text-foreground">
-                  Parent Teacher Meeting on 30th May
-                </h4>
-                <p className="text-[11px] font-medium text-muted">May 18, 2024</p>
-              </div>
+              {data.announcements.map((announcement, i) => (
+                <div
+                  key={`${announcement.title}-${i}`}
+                  className={
+                    i === 0
+                      ? "space-y-1"
+                      : "space-y-1 border-t border-warning/30 pt-2"
+                  }
+                >
+                  <h4 className="line-clamp-2 text-xs font-bold leading-snug text-foreground">
+                    {announcement.title}
+                  </h4>
+                  <p className="text-[11px] font-medium text-muted">
+                    {announcement.date}
+                  </p>
+                </div>
+              ))}
             </div>
 
             <div className="border-t border-warning/30 pt-3">
