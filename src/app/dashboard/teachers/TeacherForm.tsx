@@ -79,7 +79,6 @@ export function TeacherForm({
       if (!response.ok) {
         setFormError(payload.error ?? "Could not save. Please try again.");
         if (payload.details) setFieldErrors(payload.details);
-        setBusy(false);
         return;
       }
 
@@ -98,6 +97,7 @@ export function TeacherForm({
       });
     } catch {
       setFormError("Could not reach the server. Check your connection.");
+    } finally {
       setBusy(false);
     }
   }

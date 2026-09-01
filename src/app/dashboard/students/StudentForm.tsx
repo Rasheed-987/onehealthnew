@@ -145,13 +145,13 @@ export function StudentForm({
       if (!response.ok) {
         setFormError(payload.error ?? "Could not save. Please try again.");
         if (payload.details) setFieldErrors(payload.details);
-        setBusy(false);
         return;
       }
 
       onSaved(isEdit ? "Student updated." : "Student added.");
     } catch {
       setFormError("Could not reach the server. Check your connection.");
+    } finally {
       setBusy(false);
     }
   }

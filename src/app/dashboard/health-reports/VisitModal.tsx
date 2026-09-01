@@ -155,12 +155,12 @@ export function VisitModal({
       if (!response.ok) {
         setFormError(payload.error ?? "Could not save the visit.");
         if (payload.details) setFieldErrors(payload.details);
-        setSaving(false);
         return;
       }
       onSaved(isEdit ? "Visit updated." : "Visit recorded.");
     } catch {
       setFormError("Could not reach the server. Check your connection.");
+    } finally {
       setSaving(false);
     }
   }
