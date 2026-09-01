@@ -5,6 +5,9 @@ import { AlertTriangle, UserMinus, UserPlus } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { Badge, SelectField } from "@/components/ui/Field";
+import { Pagination } from "@/components/dashboard/Pagination";
+import { SearchInput } from "@/components/dashboard/SearchInput";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   queryKeys,
   useAssignableStudentsQuery,
@@ -27,12 +30,18 @@ export function RosterModal({
   onClose: () => void;
 }) {
   const [picked, setPicked] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const invalidate = useInvalidate();
 
-  const roster = useClassroomRosterQuery(classroom.id);
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const roster = useClassroomRosterQuery(classroom.id, {
+    search: debouncedSearch,
+    page,
+  });
   // The picker fails quietly: the roster still reads without it, which is
   // better than blocking the read on a list only the add control needs.
   const assignable = useAssignableStudentsQuery(canAssign);
@@ -175,11 +184,23 @@ export function RosterModal({
           </div>
         )}
 
+        <div className="mb-4">
+          <SearchInput
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Search students by name or ID..."
+            aria-label="Search roster students"
+          />
+        </div>
+
         {roster.isPending ? (
           <p className="py-6 text-center text-sm text-muted">Loading...</p>
         ) : students.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">
-            No children in this room yet.
+            {search ? "No matching children found." : "No children in this room yet."}
           </p>
         ) : (
           <div className="overflow-hidden rounded-control border border-border bg-surface">
@@ -249,6 +270,12 @@ export function RosterModal({
                 </tbody>
               </table>
             </div>
+            {roster.data?.pagination && (
+              <Pagination
+                pagination={roster.data.pagination}
+                onPageChange={setPage}
+              />
+            )}
           </div>
         )}
       </div>
@@ -265,3 +292,4 @@ export function RosterModal({
     </Modal>
   );
 }
+

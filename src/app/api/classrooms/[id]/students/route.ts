@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { ApiError, handle, ok, parseBody, requirePermission } from "@/lib/api";
 import { findClassroomInScope } from "@/lib/classroomScope";
 import { ageFrom } from "@/lib/students";
-import { isObjectId } from "@/lib/teachers";
+import { escapeRegex, isObjectId } from "@/lib/teachers";
 import { Classroom, Enrollment, Parent, Student, User } from "@/models";
 import { ENROLLMENT_STATUS } from "@/models/enums";
 
@@ -27,8 +27,14 @@ async function findClassroomOr404(id: string) {
   return classroom;
 }
 
+const ListQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  perPage: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: RouteContext<"/api/classrooms/[id]/students">,
 ) {
   return handle(async () => {
@@ -42,14 +48,46 @@ export async function GET(
      */
     const classroom = await findClassroomInScope(session, id);
 
+    const url = new URL(request.url);
+    const { search, page, perPage } = ListQuerySchema.parse(
+      Object.fromEntries(url.searchParams),
+    );
+
     const enrollments = await Enrollment.find({
       classroom: classroom._id,
       status: ENROLLMENT_STATUS.ACTIVE,
     }).sort({ enrolledAt: 1 });
 
-    const students = await Student.find({
-      _id: { $in: enrollments.map((e) => e.student) },
-    }).sort({ lastName: 1, firstName: 1 });
+    const activeStudentIds = enrollments.map((e) => e.student);
+
+    const studentFilter: Record<string, unknown> = {
+      _id: { $in: activeStudentIds },
+    };
+
+    if (search) {
+      const pattern = new RegExp(escapeRegex(search), "i");
+      studentFilter.$or = [
+        { firstName: pattern },
+        { lastName: pattern },
+        { studentId: pattern },
+      ];
+    }
+
+    const total = await Student.countDocuments(studentFilter);
+
+    let studentQuery = Student.find(studentFilter).sort({ lastName: 1, firstName: 1 });
+
+    const hasPagination = page !== undefined || perPage !== undefined;
+    const currentPage = page ?? 1;
+    const currentPerPage = perPage ?? 20;
+
+    if (hasPagination) {
+      studentQuery = studentQuery
+        .skip((currentPage - 1) * currentPerPage)
+        .limit(currentPerPage);
+    }
+
+    const students = await studentQuery;
 
     const parentIds = Array.from(
       new Set(
@@ -74,7 +112,7 @@ export async function GET(
       enrollments.map((e) => [String(e.student), e.enrolledAt]),
     );
 
-    return ok({
+    const payload: Record<string, unknown> = {
       classroom: {
         id: String(classroom._id),
         name: classroom.name,
@@ -95,9 +133,21 @@ export async function GET(
           relationship: g.relationship,
         })),
       })),
-    });
+    };
+
+    if (hasPagination) {
+      payload.pagination = {
+        page: currentPage,
+        perPage: currentPerPage,
+        total,
+        pageCount: Math.max(1, Math.ceil(total / currentPerPage)),
+      };
+    }
+
+    return ok(payload);
   });
 }
+
 
 const EnrolSchema = z.object({
   student: z.string().min(1, "Choose a child."),

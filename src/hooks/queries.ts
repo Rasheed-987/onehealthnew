@@ -79,8 +79,8 @@ export const queryKeys = {
     list: (search: string, page: number) =>
       ["classrooms", "list", search, page] as const,
     picker: ["classrooms", "picker"] as const,
-    roster: (classroomId: string) =>
-      ["classrooms", "roster", classroomId] as const,
+    roster: (classroomId: string, search = "", page?: number) =>
+      ["classrooms", "roster", classroomId, search, page] as const,
   },
   attendance: {
     all: ["attendance"] as const,
@@ -371,13 +371,46 @@ export function useClassroomPickerQuery(enabled = true) {
   });
 }
 
+export interface ClassroomRosterQueryOptions {
+  search?: string;
+  page?: number;
+  perPage?: number;
+}
+
 /** Who is enrolled in one room. Drives the roster panel and two child pickers. */
-export function useClassroomRosterQuery(classroomId: string, enabled = true) {
+export function useClassroomRosterQuery(
+  classroomId: string,
+  optionsOrEnabled?: ClassroomRosterQueryOptions | boolean,
+  enabledArg = true,
+) {
+  const options: ClassroomRosterQueryOptions =
+    typeof optionsOrEnabled === "object" && optionsOrEnabled !== null
+      ? optionsOrEnabled
+      : {};
+  const enabled =
+    typeof optionsOrEnabled === "boolean" ? optionsOrEnabled : enabledArg;
+
+  const search = options.search ?? "";
+  const page = options.page;
+  const perPage = options.perPage;
+
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (page) params.set("page", String(page));
+  if (perPage) params.set("perPage", String(perPage));
+  const queryString = params.toString();
+
   return useQuery({
-    queryKey: queryKeys.classrooms.roster(classroomId),
+    queryKey: queryKeys.classrooms.roster(classroomId, search, page),
     queryFn: () =>
-      fetchJson<{ students: RosterStudent[]; classroom: ClassroomRow }>(
-        `/api/classrooms/${classroomId}/students`,
+      fetchJson<{
+        students: RosterStudent[];
+        classroom: ClassroomRow;
+        pagination?: Pagination;
+      }>(
+        `/api/classrooms/${classroomId}/students${
+          queryString ? `?${queryString}` : ""
+        }`,
       ),
     enabled: enabled && classroomId !== "",
   });
