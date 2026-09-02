@@ -187,21 +187,40 @@ export function NewThreadModal({
                 ]}
               />
 
-              <SelectField
-                label="Teacher"
-                name="teacher"
-                value={teacherId}
-                disabled={!student}
-                error={fieldErrors.teacher}
-                onChange={(event) => setTeacherChoice(event.target.value)}
-                options={[
-                  { value: "", label: "Choose a teacher" },
-                  ...(student?.teachers ?? []).map((t) => ({
-                    value: t.id,
-                    label: t.threadId ? `${t.label} (already talking)` : t.label,
-                  })),
-                ]}
-              />
+              {student && student.teachers.length === 1 ? (
+                /*
+                 * No choice to make - a teacher only ever messages as
+                 * themselves, and a one-teacher room answers the question for a
+                 * guardian too. Show who it is rather than a select with one
+                 * option; the auto-selection above has already filled the form.
+                 */
+                <div>
+                  <span className="text-sm font-medium text-foreground">
+                    Teacher
+                  </span>
+                  <p className="mt-1.5 rounded-control border border-border bg-surface-muted px-3 py-2 text-sm text-foreground">
+                    {teacher?.label ?? student.teachers[0].label}
+                  </p>
+                </div>
+              ) : (
+                <SelectField
+                  label="Teacher"
+                  name="teacher"
+                  value={teacherId}
+                  disabled={!student}
+                  error={fieldErrors.teacher}
+                  onChange={(event) => setTeacherChoice(event.target.value)}
+                  options={[
+                    { value: "", label: "Choose a teacher" },
+                    ...(student?.teachers ?? []).map((t) => ({
+                      value: t.id,
+                      label: t.threadId
+                        ? `${t.label} (already talking)`
+                        : t.label,
+                    })),
+                  ]}
+                />
+              )}
 
               {existingThreadId ? (
                 <p className="rounded-control border border-border bg-surface-muted px-3 py-2 text-sm text-muted">

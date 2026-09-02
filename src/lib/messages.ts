@@ -47,7 +47,12 @@ import {
 
 export const StartThreadSchema = z.object({
   student: z.string().min(1, "Choose a child."),
-  teacher: z.string().min(1, "Choose a teacher."),
+  /**
+   * Optional when the server can work it out: a teacher always messages as
+   * themselves, and a guardian may omit it when the child's room has exactly
+   * one teacher. See `resolvePair`.
+   */
+  teacher: z.string().min(1, "Choose a teacher.").optional(),
   /** Optional first message, so starting a conversation is one round trip. */
   body: z.string().trim().min(1).max(MESSAGE_MAX_LENGTH).optional(),
 });

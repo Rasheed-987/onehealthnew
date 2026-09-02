@@ -122,12 +122,12 @@ export async function assertCanPost(
  */
 export async function resolvePair(
   session: SessionPayload,
-  input: { student: string; teacher: string },
+  input: { student: string; teacher?: string },
 ): Promise<{ student: IStudent; teacherId: string; classroom: IClassroom }> {
   if (!isObjectId(input.student)) {
     throw new ApiError(400, "That is not a valid student id.");
   }
-  if (!isObjectId(input.teacher)) {
+  if (input.teacher !== undefined && !isObjectId(input.teacher)) {
     throw new ApiError(400, "That is not a valid teacher id.");
   }
 
@@ -146,7 +146,50 @@ export async function resolvePair(
   const classroom = await Classroom.findById(enrolment.classroom);
   if (!classroom) throw new ApiError(404, "Classroom not found.");
 
-  if (!teachesClassroom(input.teacher, classroom)) {
+  /*
+   * A teacher may only open a thread as themselves. Opening one on a
+   * colleague's behalf would put a conversation in that colleague's inbox that
+   * they never agreed to have, under their name - which also means the field
+   * may simply be omitted: there is only one answer it could hold.
+   */
+  if (session.role === USER_ROLE.TEACHER) {
+    const own = await teacherProfileId(session);
+    if (input.teacher !== undefined && input.teacher !== own) {
+      throw new ApiError(
+        403,
+        "You can only start a conversation as yourself.",
+        { teacher: "You can only message as yourself." },
+      );
+    }
+    if (!own || !teachesClassroom(own, classroom)) {
+      throw new ApiError(
+        404,
+        "You are not assigned to this child's classroom.",
+        { teacher: "You are not assigned to this child's classroom." },
+      );
+    }
+    return { student, teacherId: own, classroom };
+  }
+
+  /*
+   * A guardian may omit the teacher only when the room leaves no choice to
+   * make. With several teachers, defaulting silently (even to the lead) would
+   * start a conversation with someone the family never picked.
+   */
+  const teacherId =
+    input.teacher ??
+    (classroom.teachers.length === 1
+      ? String(classroom.teachers[0].teacher)
+      : undefined);
+  if (!teacherId) {
+    throw new ApiError(
+      400,
+      "This child has more than one teacher, so choose who to message.",
+      { teacher: "Choose one of this child's teachers." },
+    );
+  }
+
+  if (!teachesClassroom(teacherId, classroom)) {
     throw new ApiError(
       404,
       "That teacher is not assigned to this child's classroom.",
@@ -154,23 +197,7 @@ export async function resolvePair(
     );
   }
 
-  /*
-   * A teacher may only open a thread as themselves. Opening one on a
-   * colleague's behalf would put a conversation in that colleague's inbox that
-   * they never agreed to have, under their name.
-   */
-  if (session.role === USER_ROLE.TEACHER) {
-    const own = await teacherProfileId(session);
-    if (own !== input.teacher) {
-      throw new ApiError(
-        403,
-        "You can only start a conversation as yourself.",
-        { teacher: "You can only message as yourself." },
-      );
-    }
-  }
-
-  return { student, teacherId: input.teacher, classroom };
+  return { student, teacherId, classroom };
 }
 
 /**
