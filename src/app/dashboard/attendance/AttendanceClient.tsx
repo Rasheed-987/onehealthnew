@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ClipboardList } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +24,14 @@ import {
 import { Notice } from "@/components/dashboard/Notice";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useDismissibleError } from "@/hooks/useDismissibleError";
-import { useAttendanceQuery, useClassroomPickerQuery } from "@/hooks/queries";
+import {
+  queryKeys,
+  useAttendanceQuery,
+  useAttendanceRegisterQuery,
+  useClassroomPickerQuery,
+  useInvalidate,
+} from "@/hooks/queries";
+import { RegisterModal } from "./RegisterModal";
 
 /**
  * The register, read back.
@@ -54,10 +61,14 @@ const STATUS_TONE = {
   EXCUSED: "neutral",
 } as const;
 
-export function AttendanceClient() {
+export function AttendanceClient({ canRecord = false }: { canRecord?: boolean }) {
   const [date, setDate] = useState(todayKey());
   const [classroom, setClassroom] = useState("");
   const [status, setStatus] = useState("");
+  const [takingRegister, setTakingRegister] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
+
+  const invalidate = useInvalidate();
 
   // The picker offers whatever the scoped classroom route returns: every room
   // for an admin, the caller's own rooms for a teacher. Nothing to filter here,
@@ -74,6 +85,24 @@ export function AttendanceClient() {
   const records = data?.records ?? [];
   const summary = data?.summary ?? null;
   const scope = data?.scope ?? null;
+
+  // Staff only, and only once a specific room is chosen: the roster for that
+  // room and day, so the screen can say how much of the register is still to
+  // take. "All classrooms" has no single roster, so this stays disabled.
+  const sheet = useAttendanceRegisterQuery(
+    debouncedDate,
+    classroom,
+    canRecord && classroom !== "",
+  );
+  const roster = sheet.data
+    ? {
+        total: sheet.data.entries.length,
+        marked: sheet.data.entries.length - sheet.data.unmarked,
+        unmarked: sheet.data.unmarked,
+      }
+    : null;
+  const roomName =
+    classrooms.find((room) => room.id === classroom)?.name ?? "this classroom";
   const [loadError, dismissError] = useDismissibleError(
     register,
     "Could not load the register.",
@@ -162,7 +191,27 @@ export function AttendanceClient() {
             </SelectContent>
           </Select>
         </label>
+
+        {/* Marking is staff-only and needs a specific room - "all classrooms"
+            is a report filter, not a roster. The API still re-checks the
+            permission and the room, so this is a convenience, not the gate. */}
+        {canRecord && (
+          <button
+            type="button"
+            onClick={() => setTakingRegister(true)}
+            disabled={!classroom}
+            title={classroom ? undefined : "Choose a classroom first"}
+            className="flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+          >
+            <ClipboardList size={16} />
+            Take / edit register
+          </button>
+        )}
       </div>
+
+      {savedNotice && (
+        <Notice onDismiss={() => setSavedNotice(null)}>{savedNotice}</Notice>
+      )}
 
       {loadError && (
         <Notice tone="danger" onDismiss={dismissError}>
@@ -194,6 +243,33 @@ export function AttendanceClient() {
         </div>
       )}
 
+      {/* How much of this room's register is done. Only shown to staff who can
+          take it, and only for a single room - it is the one place the report
+          screen doubles as a worklist. */}
+      {canRecord && classroom && roster && roster.total > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface-muted px-4 py-3">
+          <p className="text-sm text-foreground">
+            {roster.unmarked === 0 ? (
+              <>Register complete for {roomName} — all {roster.total} marked.</>
+            ) : (
+              <>
+                <span className="font-semibold">{roster.marked}</span> of{" "}
+                {roster.total} children marked for {roomName}
+                {" — "}
+                <span className="text-muted">{roster.unmarked} to go</span>
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={() => setTakingRegister(true)}
+            className="rounded-control border border-border-strong bg-surface px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
+          >
+            {roster.unmarked === 0 ? "Edit register" : "Continue register"}
+          </button>
+        </div>
+      )}
+
       <div className="card-soft overflow-hidden">
         <div className="overflow-x-auto">
           <Table className="min-w-[820px]">
@@ -202,8 +278,6 @@ export function AttendanceClient() {
                 <TableHead className="px-4 py-3 font-semibold">Child</TableHead>
                 <TableHead className="px-4 py-3 font-semibold">Classroom</TableHead>
                 <TableHead className="px-4 py-3 font-semibold">Status</TableHead>
-                <TableHead className="px-4 py-3 font-semibold">Check-in</TableHead>
-                <TableHead className="px-4 py-3 font-semibold">Check-out</TableHead>
                 <TableHead className="px-4 py-3 font-semibold">Note</TableHead>
                 <TableHead className="px-4 py-3 font-semibold">Recorded by</TableHead>
               </TableRow>
@@ -212,7 +286,25 @@ export function AttendanceClient() {
               {isPending ? (
                 <EmptyRow>Loading the register...</EmptyRow>
               ) : records.length === 0 ? (
-                <EmptyRow>{emptyMessage}</EmptyRow>
+                <EmptyRow>
+                  {canRecord && classroom && !status ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <span>
+                        No register taken for {roomName} on {date} yet.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTakingRegister(true)}
+                        className="inline-flex items-center gap-2 rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+                      >
+                        <ClipboardList size={16} />
+                        Take the register
+                      </button>
+                    </div>
+                  ) : (
+                    emptyMessage
+                  )}
+                </EmptyRow>
               ) : (
                 records.map((row) => (
                   <TableRow key={row.id}>
@@ -227,12 +319,6 @@ export function AttendanceClient() {
                         {row.statusLabel}
                       </Badge>
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-muted">
-                      {row.checkInAt ?? "-"}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-muted">
-                      {row.checkOutAt ?? "-"}
-                    </TableCell>
                     <TableCell className="px-4 py-3 text-muted">{row.note ?? "-"}</TableCell>
                     <TableCell className="px-4 py-3 text-muted">
                       {row.recordedBy?.name ?? "-"}
@@ -244,6 +330,22 @@ export function AttendanceClient() {
           </Table>
         </div>
       </div>
+
+      {takingRegister && classroom && (
+        <RegisterModal
+          key={`${classroom}-${date}`}
+          classroomId={classroom}
+          classroomName={roomName}
+          date={date}
+          onClose={() => setTakingRegister(false)}
+          onSaved={(message) => {
+            setTakingRegister(false);
+            setSavedNotice(message);
+            // The register list and the sheet both read these lines.
+            invalidate(queryKeys.attendance.all);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -283,7 +385,7 @@ function Tile({
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={7} className="px-4 py-10 text-center text-sm text-muted">
+      <TableCell colSpan={5} className="px-4 py-10 text-center text-sm text-muted">
         {children}
       </TableCell>
     </TableRow>

@@ -9,6 +9,7 @@ import {
 
 import { fetchJson } from "@/lib/fetchJson";
 import type { AttendanceRow, AttendanceSummary } from "@/lib/attendance";
+import type { AttendanceStatus } from "@/models/enums";
 import type { ClassroomRow } from "@/lib/classrooms";
 import type { ClinicalVisitRow, VisitSummary } from "@/lib/clinicalVisits";
 import type { DailyProgressRow, ProgressSummary } from "@/lib/dailyProgress";
@@ -86,6 +87,8 @@ export const queryKeys = {
     all: ["attendance"] as const,
     list: (date: string, classroom: string, status: string) =>
       ["attendance", "list", date, classroom, status] as const,
+    register: (date: string, classroom: string) =>
+      ["attendance", "register", date, classroom] as const,
   },
   dailyProgress: {
     all: ["daily-progress"] as const,
@@ -450,6 +453,54 @@ export function useAttendanceQuery(
         scope: ScopeInfo | null;
       }>(`/api/attendance?${filterParams({ date, classroom, status })}`),
     ...KEEP_ROWS,
+  });
+}
+
+/** One roster row on the register sheet: the child, and their mark if taken. */
+export interface AttendanceRegisterEntry {
+  student: {
+    id: string;
+    fullName: string;
+    age: number;
+    photoUrl: string | null;
+  };
+  /** null means nobody has marked this child for the day yet. */
+  status: AttendanceStatus | null;
+  statusLabel: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  note: string | null;
+  /** False when the existing line was taken in a room the child has since left. */
+  markedInThisClassroom: boolean;
+}
+
+export interface AttendanceRegisterSheet {
+  classroom: { id: string; name: string; gradeLevel: string };
+  date: string;
+  entries: AttendanceRegisterEntry[];
+  summary: AttendanceSummary;
+  unmarked: number;
+}
+
+/**
+ * The register sheet for one room and one day - the roster left-joined with
+ * whatever has been marked so far, so an untouched child still appears with
+ * `status: null`. Staff only; the screen POSTs the whole sheet back to
+ * `/api/attendance`. Works for any past day, which is what lets an admin
+ * correct an earlier register.
+ */
+export function useAttendanceRegisterQuery(
+  date: string,
+  classroom: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.attendance.register(date, classroom),
+    queryFn: () =>
+      fetchJson<AttendanceRegisterSheet>(
+        `/api/attendance/register?${filterParams({ date, classroom })}`,
+      ),
+    enabled: enabled && classroom !== "",
   });
 }
 

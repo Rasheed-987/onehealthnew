@@ -34,6 +34,7 @@ export default async function GalleryPage() {
           guardian never sees an action that would 403. */}
       <GalleryClient
         canCreate={can(user.role, "gallery:create")}
+        canUpdate={can(user.role, "gallery:update")}
         canDelete={can(user.role, "gallery:delete")}
       />
     </>

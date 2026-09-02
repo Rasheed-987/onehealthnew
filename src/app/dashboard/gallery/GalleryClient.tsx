@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Pencil, Plus, Trash2, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/Field";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
 import { useDismissibleError } from "@/hooks/useDismissibleError";
 import type { GalleryItemRow } from "@/lib/gallery";
 import { GALLERY_ITEM_TYPE, GALLERY_ITEM_TYPE_LABEL } from "@/models/enums";
+import { EditModal } from "./EditModal";
 import { UploadModal } from "./UploadModal";
 
 /**
@@ -43,9 +44,11 @@ import { UploadModal } from "./UploadModal";
 
 export function GalleryClient({
   canCreate,
+  canUpdate,
   canDelete,
 }: {
   canCreate: boolean;
+  canUpdate: boolean;
   canDelete: boolean;
 }) {
   const [classroom, setClassroom] = useState("");
@@ -55,6 +58,7 @@ export function GalleryClient({
 
   const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState<GalleryItemRow | null>(null);
+  const [editing, setEditing] = useState<GalleryItemRow | null>(null);
   const [deleting, setDeleting] = useState<GalleryItemRow | null>(null);
 
   const invalidate = useInvalidate();
@@ -207,18 +211,32 @@ export function GalleryClient({
                   {item.classroom && <span>· {item.classroom.name}</span>}
                 </div>
 
-                {canDelete && (
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleting(item)}
-                      aria-label={`Remove ${item.title ?? "photo"}`}
-                      className="text-danger hover:bg-danger-subtle hover:text-danger"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
+                {(canUpdate || canDelete) && (
+                  <div className="flex justify-end gap-1">
+                    {canUpdate && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditing(item)}
+                        className="text-primary hover:bg-primary-subtle hover:text-primary"
+                      >
+                        <Pencil size={14} />
+                        Edit
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleting(item)}
+                        aria-label={`Remove ${item.title ?? "photo"}`}
+                        className="text-danger hover:bg-danger-subtle hover:text-danger"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -233,6 +251,19 @@ export function GalleryClient({
           onClose={() => setUploading(false)}
           onSaved={(message) => {
             setUploading(false);
+            setNotice(message);
+            invalidate(queryKeys.gallery.all);
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditModal
+          key={editing.id}
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(message) => {
+            setEditing(null);
             setNotice(message);
             invalidate(queryKeys.gallery.all);
           }}

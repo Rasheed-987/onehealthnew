@@ -10,34 +10,7 @@ import {
 import { addConnection } from "@/lib/realtime/hub";
 import { tokenFromUpgrade, verifySessionToken } from "@/lib/sessionToken";
 
-/**
- * The app and the socket, on one port.
- *
- * Next's own `next start` server gives no way to handle an HTTP upgrade, which
- * is the whole of what a WebSocket needs - so the server is created here and
- * Next is handed every request that is not an upgrade to `/ws`. Everything
- * about the app is otherwise unchanged: same routes, same rendering, same
- * `next build` output.
- *
- * Two consequences worth being explicit about:
- *
- * - This cannot run on a serverless host. Vercel and friends have no long-lived
- *   process to hold a socket open in. The client falls back to polling on its
- *   own when the socket will not connect, so deploying there still *works* - it
- *   just works the way it did before this change.
- * - One process, one register of connections. Behind a load balancer each
- *   instance would only reach its own clients; see the note in `hub.ts`.
- *
- * Run through tsx (`npm run dev` / `npm start`) rather than compiled, so it can
- * use TypeScript and the `@/` alias the rest of the codebase is written in.
- */
 
-/*
- * `--dev` rather than `NODE_ENV=development npm run dev`: an inline environment
- * variable is not a thing PowerShell or cmd can do, and this project is
- * developed on Windows. NODE_ENV is then set from it, because Next and plenty
- * of libraries below it read that and not our flag.
- */
 const dev = process.argv.includes("--dev");
 // Cast: @types/node declares NODE_ENV readonly, which is a guardrail for app
 // code. Setting it before anything else loads is exactly what a launcher does.
@@ -45,7 +18,7 @@ const dev = process.argv.includes("--dev");
   ? "development"
   : "production";
 
-const port = Number.parseInt(process.env.PORT ?? "3000", 10);
+const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const hostname = process.env.HOSTNAME ?? "localhost";
 
 const app = next({ dev, hostname, port });
@@ -56,11 +29,7 @@ void app.prepare().then(() => {
     handle(req, res);
   });
 
-  /*
-   * `noServer` rather than letting ws own the port: Next has to keep serving
-   * every ordinary request on it. This mode hands us the upgrade and leaves
-   * the routing decision here, which is also where the auth check belongs.
-   */
+ 
   const wss = new WebSocketServer({ noServer: true });
   const upgradeNext = app.getUpgradeHandler();
 

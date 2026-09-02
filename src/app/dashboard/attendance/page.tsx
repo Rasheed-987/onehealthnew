@@ -41,7 +41,9 @@ export default async function AttendancePage() {
       {/* Role shows up here as wording only. What the page can actually read
           is decided server-side by resolveAttendanceScope, never by this. */}
       <PageHeader title="Attendance Records" description={description} />
-      <AttendanceClient />
+      {/* Marking is a rendering hint only - `POST /api/attendance` re-checks
+          `attendance:mark` and that the room is the caller's to write. */}
+      <AttendanceClient canRecord={can(user.role, "attendance:mark")} />
     </>
   );
 }
