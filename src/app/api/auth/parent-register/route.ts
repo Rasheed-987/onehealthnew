@@ -6,7 +6,6 @@ import { connectDB } from "@/lib/db";
 import { sendActivationCodeEmail } from "@/lib/emails";
 import { createParentAccount } from "@/lib/guardians";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password";
-import { clientIp, enforce } from "@/lib/rateLimit";
 import { escapeRegex } from "@/lib/teachers";
 import { issueOtpToken } from "@/lib/tokens";
 import { GuardianLinkRequest, Parent, Student, User } from "@/models";
@@ -103,24 +102,6 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await parseBody(request, RegisterSchema);
     await connectDB();
-
-    /*
-     * Two keys, because neither is sufficient alone. The IP limit is what bounds
-     * someone walking through student IDs; the email limit still applies when
-     * that IP is forged or shared, which behind a school's own NAT it will be.
-     */
-    await enforce(
-      `parent-register:ip:${clientIp(request)}`,
-      10,
-      60 * 60 * 1000,
-      "Too many sign-up attempts. Please try again later.",
-    );
-    await enforce(
-      `parent-register:email:${input.email}`,
-      5,
-      24 * 60 * 60 * 1000,
-      "Too many sign-up attempts for this email address. Please try again tomorrow.",
-    );
 
     const student = await findStudentByTypedId(input.studentId);
     if (!student) {

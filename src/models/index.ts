@@ -46,7 +46,6 @@ export {
   GuardianLinkRequest,
   type IGuardianLinkRequest,
 } from "./GuardianLinkRequest";
-export { RateLimit, type IRateLimit } from "./RateLimit";
 export {
   VerificationToken,
   TOKEN_TYPE,
